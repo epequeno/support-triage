@@ -68,11 +68,11 @@ caveats, what the routing experiment showed, and how to pick the work back up.
 
 ## Status
 
-**M0 done, the eval (M5) runs, routing is measured, the web UI (M3) and OTEL traces (M4) are
-built.** Built: the mock support org, the citable policy corpus, the LangGraph graph, model
-routing, the approval gate, cost accounting with a per-case cap, the CLI, the thin web UI
-(`just web`), span-tree traces on every run, 23 offline tests, and `just eval` over all ten
-cases with held-out truth.
+**M0 done, the eval (M5) runs, routing is measured, the web UI (M3), OTEL traces (M4) and the
+AWS deploy (M6) are built.** Built: the mock support org, the citable policy corpus, the
+LangGraph graph, model routing, the approval gate, cost accounting with a per-case cap, the
+CLI, the thin web UI (`just web`), span-tree traces on every run, 24 offline tests, and
+`just eval` over all ten cases with held-out truth.
 
 The routing experiment (real API, all ten cases, 2026-10-12). "Pre-fix" rows ran before the
 retrieval fix below; "post-fix" rows after:
@@ -102,6 +102,24 @@ right 12h "corrected" into a wrong 1h. Security cases have a defined severity (`
 Sev2), and the repair path survives an exception raised bare (an empty `args` tuple used to crash
 the repair itself, mid-eval).
 
-**Not built yet:** a wider case set, the CDK stack (M6).
+## The deploy (M6), for the record
+
+`infra/` holds a one-stack CDK Python deploy — public-subnet VPC, one Fargate service, the task's
+public IP as the URL, no ALB. It was **deployed once for real, photographed, and torn down**
+([`docs/ui-in-the-cloud.png`](docs/ui-in-the-cloud.png)): the UI live on the task's public IP,
+CASE-1041 triaged through it — routed to strong with the routing reasons recorded — the escalation
+proposal gated as *not executed, a human approves these*, approved by a named human, and the audit
+trail showing the executed change. Total cloud lifetime: under an hour.
+
+Two things the deploy found that nothing local could: the ledger table existed only from its
+first write (a freshly seeded container 500'd `/api/ledger`), and an Apple-Silicon Docker build
+crashed Fargate with `exec format error` (the asset now pins `LINUX_AMD64`).
+
+**One caveat worth copying correctly:** the demo stack passes the OpenRouter key as a plain
+task-definition environment variable. That is acceptable only for a stack that is torn down
+within the hour, and it is spelled out so nobody ships that shortcut. For anything that outlives
+a screenshot: SSM Parameter Store or Secrets Manager, not the task definition.
+
+**Not built yet:** a wider case set.
 
 **Deliberately not built:** MCP, authentication, multi-tenancy, anything persistent, fine-tuning.

@@ -292,9 +292,9 @@ def test_state_changes_require_a_named_human(conn):
     proposal = tools.propose("CASE-1041", "escalate", {"team": "on-call"}, "policy says so")
     with pytest.raises(PermissionError):
         tools.execute(conn, proposal, "")
-    tools.execute(conn, proposal, "steven")
+    tools.execute(conn, proposal, "R. Alvarez")
     rows = backend.approvals(conn, "CASE-1041")
-    assert len(rows) == 1 and rows[0]["approved_by"] == "steven"
+    assert len(rows) == 1 and rows[0]["approved_by"] == "R. Alvarez"
 
 
 def test_proposing_a_non_state_change_is_rejected():
