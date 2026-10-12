@@ -156,6 +156,8 @@ just web                      # the thin UI: triage a case, approve a proposal a
 
 **Next: M6, on a different machine.** The deploy is deliberately not started here — the AWS
 credentials live on the other system, and CDK iterates fastest written against a real account.
+Deploy auth (verified 2026-10-12): `AWS_PROFILE=arch` on the deploy machine — SSO session `main`,
+account `496830984285`, AdministratorAccess.
 The plan stays as decided: container, one VPC, the app behind it, the UI photographed in the
 cloud, torn down after the screenshot, **not** over-productionised, deploy once for real.
 Before starting there: the repo is on GitHub (`epequeno/support-triage`, pushed through `f0cd9e2`
