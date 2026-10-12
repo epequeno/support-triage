@@ -308,6 +308,14 @@ def test_the_cost_cap_stops_a_run_rather_than_completing_it():
         ledger.charge("strong", 5_000, 5_000)
 
 
+def test_the_ledger_reads_before_its_first_write(conn):
+    """cost_log exists only from its first write, but both readers (/api/ledger and `just check`)
+    must read a freshly seeded DB without a 500 — found by running the container."""
+    assert costs.summary(conn) == "no model calls logged yet"
+    costs.log(conn, "CASE-1041", "m", "cheap", 1, 2, 0.00001)
+    assert "cheap" in costs.summary(conn)
+
+
 def test_the_record_cost_reconciles_with_the_ledger(conn):
     """The meter is either right or loud. A silent disagreement would make 'routing saves money'
     an unfalsifiable claim."""

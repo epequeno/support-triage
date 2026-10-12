@@ -52,7 +52,9 @@ def cases() -> list[dict]:
 
 @app.get("/api/ledger")
 def ledger() -> dict:
-    rows = list(backend.connect().execute(
+    conn = backend.connect()
+    costs.ensure_cost_log(conn)
+    rows = list(conn.execute(
         "SELECT tier, COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(cost_usd)"
         " FROM cost_log GROUP BY tier ORDER BY tier"))
     return {"tiers": [{"tier": r[0], "calls": r[1], "in": r[2], "out": r[3], "cost": r[4]} for r in rows],

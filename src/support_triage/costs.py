@@ -57,11 +57,18 @@ def price(tier: str, input_tokens: int, output_tokens: int) -> float:
     return (input_tokens / 1_000_000) * cin + (output_tokens / 1_000_000) * cout
 
 
-def log(conn: sqlite3.Connection, case_id: str, model: str, tier: str, input_tokens: int,
-        output_tokens: int, cost_usd: float) -> None:
+def ensure_cost_log(conn: sqlite3.Connection) -> None:
+    """The ledger table exists only from its first write — but every reader needs it too,
+    so both the write and the read ensure it. Found by running the container on a
+    freshly seeded DB: /api/ledger 500s before any triage has ever spent a token."""
     conn.execute(
         "CREATE TABLE IF NOT EXISTS cost_log (case_id TEXT, model TEXT, tier TEXT, input_tokens INT,"
         " output_tokens INT, cost_usd REAL, at TEXT)")
+
+
+def log(conn: sqlite3.Connection, case_id: str, model: str, tier: str, input_tokens: int,
+        output_tokens: int, cost_usd: float) -> None:
+    ensure_cost_log(conn)
     conn.execute("INSERT INTO cost_log VALUES (?,?,?,?,?,?,?)",
                  (case_id, model, tier, input_tokens, output_tokens, cost_usd,
                   datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")))
@@ -69,6 +76,7 @@ def log(conn: sqlite3.Connection, case_id: str, model: str, tier: str, input_tok
 
 
 def summary(conn: sqlite3.Connection) -> str:
+    ensure_cost_log(conn)
     rows = list(conn.execute(
         "SELECT tier, COUNT(*) n, SUM(input_tokens) i, SUM(output_tokens) o, SUM(cost_usd) c"
         " FROM cost_log GROUP BY tier ORDER BY tier"))
