@@ -111,6 +111,9 @@ CASE-1041 triaged through it — routed to strong with the routing reasons recor
 proposal gated as *not executed, a human approves these*, approved by a named human, and the audit
 trail showing the executed change. Total cloud lifetime: under an hour.
 
+<img src="docs/ui-in-the-cloud.png" width="860"
+     alt="The support-triage web UI running on the Fargate task's public IP: the case list, the CASE-1041 record with severity, citations and the routed draft, the gated proposal approved by a named human, and the audit trail showing the executed escalation">
+
 Two things the deploy found that nothing local could: the ledger table existed only from its
 first write (a freshly seeded container 500'd `/api/ledger`), and an Apple-Silicon Docker build
 crashed Fargate with `exec format error` (the asset now pins `LINUX_AMD64`).
