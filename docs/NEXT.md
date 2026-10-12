@@ -154,17 +154,25 @@ just eval --tier cheap        # the same table for $0.0028 — useful for prompt
 just web                      # the thin UI: triage a case, approve a proposal as a named human
 ```
 
-**Next: M6, on a different machine.** The deploy is deliberately not started here — the AWS
-credentials live on the other system, and CDK iterates fastest written against a real account.
-Deploy auth (verified 2026-10-12): `AWS_PROFILE=arch` on the deploy machine — SSO session `main`,
-account `496830984285`, AdministratorAccess.
-The plan stays as decided: container, one VPC, the app behind it, the UI photographed in the
-cloud, torn down after the screenshot, **not** over-productionised, deploy once for real.
-Before starting there: the repo is on GitHub (`epequeno/support-triage`, pushed through `f0cd9e2`
-on 2026-10-12) — clone it there, then `just sync && just seed && just test` to confirm the
-baseline. The M4 note: traces land in `results/traces/` on every run (gitignored) and
-`just triage` prints the path. The distribution question is answered above; the one known wobble
-(`CASE-1046`) is a two-line corpus fix in `POL-SCOPE-1` whenever someone wants a
+**M6: done (2026-10-12), deployed once for real, photographed, torn down.**
+Deploy auth: `AWS_PROFILE=arch` — SSO session `main`, account `496830984285`, AdministratorAccess.
+`infra/` holds the one-stack CDK Python app (`cdk.json`, `app.py`, `support_triage_stack.py`,
+`uv run cdk deploy --require-approval never` from `infra/`); the repo root holds the `Dockerfile`
+and `.dockerignore`. The stack: one public-subnet VPC (no NAT), one Fargate service (0.25 vCPU /
+512 MB, task public IP, port 8000 open, `ONE_DAY` log retention, no ALB — the task IP is the URL,
+deliberately). The API key rides the task definition as a plain environment variable — visible
+in the ECS console to anyone with account read access; acceptable only because the stack was
+torn down within the hour, and called out here so M7 doesn't ship that shortcut. Two bugs were
+found by deploying: the container-first run surfaced `cost_log` existing only from its first
+write (both readers now ensure the table, test-pinned), and the arm64-built image crashed Fargate
+with `exec format error` (asset now pins `Platform.LINUX_AMD64` — an Apple-Silicon Docker can
+never catch this locally). Photograph: `docs/ui-in-the-cloud.png` — the UI live on the task's
+public IP, CASE-1041 triaged through it (routed strong, reasons recorded), the escalation
+proposal approved by a named human (R. Alvarez), the audit trail showing the executed change.
+`cdk destroy` completed; the only residue is the image in the CDK bootstrap assets ECR repo
+(few cents, shared repo — delete `support-triage` tagged images there if it bothers anyone).
+The M4 note stands: traces land in `results/traces/` on every run (gitignored). The one known
+wobble (`CASE-1046`) is a two-line corpus fix in `POL-SCOPE-1` whenever someone wants a
 perfect-case-in-every-run claim, which is not a claim worth making.
 
 **On GitHub at `epequeno/support-triage`** — the repo is remote-backed now; M7 (making it public,

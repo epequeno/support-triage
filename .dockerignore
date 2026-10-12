@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.git/
+infra/
+results/
+docs/
+tests/
+supportorg.db
+.env
+justfile
+.DS_Store
