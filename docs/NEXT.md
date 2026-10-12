@@ -58,6 +58,29 @@ All ten cases, real API, one run per configuration. "Pre-fix" rows ran before th
   The 50/50 is a run, not a guarantee; the pre-fix routed runs scored 9/10 in_scope and 8/10 in
   scope on the same code with different draws.
 
+## The eval distribution: stability, measured (2026-10-12)
+
+Four routed runs of the post-fix code (the 50/50 above plus three more; `results/eval-dist-*.json`),
+forty case-draws total:
+
+| axis | across 4 runs | read as |
+|---|---|---|
+| severity | **40/40** | stable — the corpus now decides it, not the model's mood |
+| in scope | 39/40 | one miss, both the same case (see below) |
+| sla | 39/40 | same single miss |
+| action | 39/40 | same single miss |
+| citations | 39/40 | same single miss |
+| cost | $0.289–$0.303 per ten-case run | mean $0.296, tight |
+
+Per case: nine of ten cases are perfect in all four runs. `CASE-1046` is 3/4 — one run read the
+Business feature request as `out_of_scope` with no SLA instead of `respond` at 24h. That is the
+second sighting of the same wobble, and it is a **corpus bug, not a model one**:
+`POL-SCOPE-1`'s "The same applies to feature requests, which are Sev4 and are not commitments" is
+genuinely ambiguous — "the same applies" can read as "also out of scope" or "also closed without a
+commitment". Split that sentence when picked up and the last wobble should go. The 50/50 is real but
+the honest claim is: **39–40 of 40 per axis, with one identified corpus ambiguity accounting for
+every miss.**
+
 ## What the 2026-10-12 session changed
 
 1. **Security severity is grounded.** `POL-SEC-1` now states a security report is classified Sev2
@@ -114,10 +137,10 @@ Model defaults are verified against the provider catalogue on 2026-10-11 (cheap
 Nothing was assumed: the names and prices were read from the catalogue, and `costs.PRICES` is the
 single place to update them.
 
-Spend: **$1.02 to 2026-10-11, $1.77 for the 2026-10-12 sessions** (nine ten-case evals, one smoke
-run, one duplicated-and-cancelled eval that still paid for its tokens) — **$2.79 total**. The
-expensive part remains output tokens from drafts, and the routed run at $0.30/ten cases is the
-operating cost of the current configuration.
+Spend: **$1.02 to 2026-10-11, $2.77 for the 2026-10-12 sessions** (thirteen ten-case evals including
+the four-run distribution, the web-UI smoke runs, and one duplicated-and-cancelled eval that still
+paid for its tokens) — **$3.79 total**. The expensive part remains output tokens from drafts, and
+the routed run at ~$0.30/ten cases is the operating cost of the current configuration.
 
 ## How to pick it up
 
@@ -131,13 +154,15 @@ just eval --tier cheap        # the same table for $0.0028 — useful for prompt
 just web                      # the thin UI: triage a case, approve a proposal as a named human
 ```
 
-**Next, in order:** the CDK stack and one real deploy-and-destroy (M6) — container, one VPC, the
-app behind it, the UI photographed in the cloud, torn down after the screenshot. OTEL traces (M4)
-landed 2026-10-12: real `opentelemetry-api`+`sdk`, no collector — every triage (CLI, web, eval)
-flushes a span tree to `results/traces/<case>-<stamp>.json`: the seven nodes, both model calls with
-tier and tokens, repairs, durations. It paid for itself immediately — the first live trace showed
-a 1.3s repair call inside classify that the record's notes mention only in passing. With the
-routed eval at 50/50, the remaining open question is stability under variance: rerun `just eval` a
-few times and see what a *distribution* over the ten cases looks like, before widening the case set.
+**Next: M6, on a different machine.** The deploy is deliberately not started here — the AWS
+credentials live on the other system, and CDK iterates fastest written against a real account.
+The plan stays as decided: container, one VPC, the app behind it, the UI photographed in the
+cloud, torn down after the screenshot, **not** over-productionised, deploy once for real.
+Before starting there: this repo is local to this machine — move it with
+`git bundle create support-triage.bundle main` (or push to a private remote), then `just sync &&`
+`just seed && just test` to confirm the baseline. The M4 note: traces land in `results/traces/`
+on every run (gitignored) and `just triage` prints the path. The distribution question is
+answered above; the one known wobble (`CASE-1046`) is a two-line corpus fix in `POL-SCOPE-1`
+whenever someone wants a perfect-case-in-every-run claim, which is not a claim worth making.
 
 **Local git only — the repo is not published.** Publishing is M7 and has not been decided.

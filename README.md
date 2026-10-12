@@ -90,7 +90,10 @@ because `POL-PLAN-1` and `POL-SCOPE-1` never reached the model, and no tier can 
 cannot see. The corpus is eight sections; it now renders in full, ranked, and the routed run is a
 perfect 50/50 at $0.30. Second: even with everything visible, forced cheap gives up one to two
 points (security handling) at 1% of routed's cost — that residual gap is what the router is for.
-One run per cell, non-deterministic model, n=10: ±1-2 points is noise.
+One run per cell, non-deterministic model, n=10. Stability, measured over four routed runs of the
+post-fix code: severity **40/40**; in scope, sla, action and citations **39/40** each, every
+single miss the same case (`CASE-1046`, a known `POL-SCOPE-1` wording ambiguity — a corpus fix,
+not a model problem); $0.29–$0.30 per run.
 
 The `sla` axis remains partly self-fulfilling — the corpus corrects a wrong target — but the
 correction is now earned: a cited override (incident, security, out of scope) applies only when the
