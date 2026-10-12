@@ -6,11 +6,19 @@ spending anything, and a failure here is a failure of the pipeline rather than o
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from support_triage import backend, costs, policy, router, seed, tools
+from support_triage import backend, costs, policy, router, seed, tools, traces
 from support_triage.agent import CitationError, TriageAgent
 from support_triage.models import Classification, Severity
+
+
+def _flatten(node):
+    yield node
+    for child in node["children"]:
+        yield from _flatten(child)
 
 
 @pytest.fixture()
@@ -236,6 +244,46 @@ def test_the_repair_path_survives_an_exception_raised_bare(conn):
     record = agent.triage("CASE-1041")
     assert record.severity is Severity.SEV1
     assert any("repair attempt" in n for n in record.notes)
+
+
+# ── traces (M4) ─────────────────────────────────────────────────────────────────────────────────
+
+def test_a_triage_is_a_span_tree_not_a_wall_of_text(conn):
+    """The seven nodes and both model calls land in one trace file, nested under a root that
+    carries the verdict. A triage can be read as a trace. Offline: the fake caller records spans
+    just like the real one."""
+    verdict = Classification(severity=Severity.SEV1, in_scope=True, sla_response_hours=1.0,
+                             next_action="escalate",
+                             citations=["POL-SEV-1", "POL-SLA-1", "POL-ESC-1"])
+    agent = make_agent("strong", verdict)
+    agent.conn = conn
+    record = agent.triage("CASE-1041")
+
+    path = traces.last_path()
+    assert path is not None and path.exists(), "a finished triage must have flushed its trace"
+    tree = json.loads(path.read_text())
+    assert tree["name"] == "triage"
+    assert tree["attributes"]["case_id"] == record.case_id
+    assert tree["attributes"]["severity"] == "Sev1"
+    assert tree["attributes"]["next_action"] == "escalate"
+    names = {n["name"] for n in _flatten(tree)}
+    assert {"node.gather", "node.route", "node.retrieve", "node.classify", "node.draft",
+            "node.propose", "node.assemble", "model.classify", "model.draft"} <= names
+    classify = next(n for n in _flatten(tree) if n["name"] == "model.classify")
+    assert classify["attributes"]["tier"] == "strong"
+
+
+def test_a_repair_is_a_span_of_its_own(conn):
+    """The repair path is a second model call; the trace must say so, not bury it."""
+    bad = Classification(severity=Severity.SEV1, in_scope=True, sla_response_hours=1.0,
+                         next_action="respond", citations=["POL-NOPE-1"])
+    good = Classification(severity=Severity.SEV1, in_scope=True, sla_response_hours=1.0,
+                          next_action="respond", citations=["POL-SEV-1", "POL-SLA-1"])
+    agent = make_agent("strong", bad, then=good)
+    agent.conn = conn
+    agent.triage("CASE-1041")
+    names = {n["name"] for n in _flatten(json.loads(traces.last_path().read_text()))}
+    assert "model.classify.repair" in names
 
 
 # ── the gate, and the meter ──────────────────────────────────────────────────────────────────────

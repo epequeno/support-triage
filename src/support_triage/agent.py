@@ -14,8 +14,10 @@ from typing import Any, Protocol, TypedDict
 
 from langgraph.graph import END, StateGraph
 
-from . import costs, policy, router, tools
+from . import costs, policy, router, tools, traces
 from .models import Classification, Proposal, RoutingDecision, Severity, SEVERITY_LABEL, TriageRecord
+
+_tracer = traces.tracer()
 
 
 class CitationError(RuntimeError):
@@ -108,31 +110,40 @@ class TriageAgent:
         self.graph = self._build()
 
     # ── nodes ────────────────────────────────────────────────────────────────────────────────────
+    @traces.span("node.gather")
     def _gather(self, state: TriageState) -> TriageState:
         context = tools.get_case_context(self.conn, state["case_id"])
         return {"context": context, "notes": [], "calls": 0, "input_tokens": 0, "output_tokens": 0,
                 "cost_usd": 0.0}
 
+    @traces.span("node.route")
     def _route(self, state: TriageState) -> TriageState:
         context = state["context"]
         decision = router.route(context["case"], context["account"], context.get("open_incidents", []),
                                force=self.force_tier)
         return {"routing": decision.model_dump()}
 
+    @traces.span("node.retrieve")
     def _retrieve(self, state: TriageState) -> TriageState:
         context = state["context"]
         query = f"{context['case']['subject']} {context['case']['body']} severity response target escalation"
         hits = tools.search_policy(query)
         return {"candidates": hits}
 
+    @traces.span("node.classify")
     def _classify(self, state: TriageState) -> TriageState:
         caller = self.callers[state["routing"]["tier"]]
         context, candidates = state["context"], state["candidates"]
         notes = list(state.get("notes", []))
-        try:
-            verdict, usage = caller.classify(context, candidates)
-        except Exception as exc:  # noqa: BLE001 — malformed model output is a repairable failure
-            verdict, usage = self._repair(caller, context, candidates, exc, notes, state)
+        with _tracer.start_as_current_span("model.classify") as span:
+            try:
+                verdict, usage = caller.classify(context, candidates)
+            except Exception as exc:  # noqa: BLE001 — malformed model output is a repairable failure
+                verdict, usage = self._repair(caller, context, candidates, exc, notes, state)
+            span.set_attribute("tier", caller.tier)
+            span.set_attribute("model", usage.get("model", ""))
+            span.set_attribute("input_tokens", usage.get("input_tokens", 0))
+            span.set_attribute("output_tokens", usage.get("output_tokens", 0))
 
         unknown = policy.unknown_ids(verdict.citations)
         if unknown:
@@ -178,15 +189,28 @@ class TriageAgent:
                       detail.replace(",", " ").split()) if i.startswith("POL-")],
                   "validation_error": detail[:300]}
         notes.append(f"repair attempt: {type(exc).__name__}: {detail[:120]}")
-        return caller.classify({**context, "repair": repair}, candidates)
+        with _tracer.start_as_current_span("model.classify.repair") as span:
+            verdict, usage = caller.classify({**context, "repair": repair}, candidates)
+            span.set_attribute("tier", caller.tier)
+            span.set_attribute("model", usage.get("model", ""))
+            span.set_attribute("input_tokens", usage.get("input_tokens", 0))
+            span.set_attribute("output_tokens", usage.get("output_tokens", 0))
+            return verdict, usage
 
+    @traces.span("node.draft")
     def _draft(self, state: TriageState) -> TriageState:
         caller = self.callers[state["routing"]["tier"]]
         verdict = Classification(**state["verdict"])
-        text, usage = caller.draft(state["context"], verdict)
+        with _tracer.start_as_current_span("model.draft") as span:
+            text, usage = caller.draft(state["context"], verdict)
+            span.set_attribute("tier", caller.tier)
+            span.set_attribute("model", usage.get("model", ""))
+            span.set_attribute("input_tokens", usage.get("input_tokens", 0))
+            span.set_attribute("output_tokens", usage.get("output_tokens", 0))
         cost = self._charge(state["case_id"], caller.tier, usage)
         return {"draft": text, **_usage_state(state, usage, cost)}
 
+    @traces.span("node.propose")
     def _propose(self, state: TriageState) -> TriageState:
         verdict = Classification(**state["verdict"])
         case_id = state["case_id"]
@@ -211,6 +235,7 @@ class TriageAgent:
                                            "classification follows POL-SEV-1, not the declaration"))
         return {"record": {"proposals": [p.model_dump() for p in proposals]}}
 
+    @traces.span("node.assemble")
     def _assemble(self, state: TriageState) -> TriageState:
         verdict = Classification(**state["verdict"])
         context = state["context"]
@@ -259,14 +284,20 @@ class TriageAgent:
         return g.compile()
 
     def triage(self, case_id: str) -> TriageRecord:
-        # A fresh ledger per case: the cap is a per-case budget, and a reused ledger would let one
-        # case spend another case's headroom.
-        self.ledger = costs.Ledger(cap_usd=self.ledger.cap_usd)
-        final = self.graph.invoke({"case_id": case_id})
-        record = TriageRecord(**final["record"])
-        if abs(record.cost_usd - round(self.ledger.spent_usd, 6)) > 1e-9:
-            raise AssertionError("logged cost and ledger disagree; the cost meter is lying")
-        return record
+        with _tracer.start_as_current_span("triage") as span:
+            span.set_attribute("case_id", case_id)
+            # A fresh ledger per case: the cap is a per-case budget, and a reused ledger would let one
+            # case spend another case's headroom.
+            self.ledger = costs.Ledger(cap_usd=self.ledger.cap_usd)
+            final = self.graph.invoke({"case_id": case_id})
+            record = TriageRecord(**final["record"])
+            span.set_attribute("severity", str(record.severity))
+            span.set_attribute("next_action", record.next_action)
+            span.set_attribute("tier", record.routing.tier)
+            span.set_attribute("cost_usd", record.cost_usd)
+            if abs(record.cost_usd - round(self.ledger.spent_usd, 6)) > 1e-9:
+                raise AssertionError("logged cost and ledger disagree; the cost meter is lying")
+            return record
 
 
 def _merge_usage(a: Usage, b: Usage) -> Usage:

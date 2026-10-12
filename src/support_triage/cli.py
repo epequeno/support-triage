@@ -11,7 +11,7 @@ import argparse
 import json
 import sys
 
-from . import backend, tools
+from . import backend, tools, traces
 from .models import TriageRecord
 
 
@@ -68,6 +68,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(json.dumps(record.model_dump(), indent=2) if args.json else render(record))
+    trace_path = traces.last_path()
+    if trace_path is not None:
+        print(f"trace: {trace_path}")
 
     if args.approve_as:
         for proposal in record.proposals:

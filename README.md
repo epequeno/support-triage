@@ -48,6 +48,7 @@ case text ─▶ gather ─▶ route ─▶ retrieve ─▶ classify ─▶ draf
 | `src/support_triage/tools.py` | Reads are ordinary functions. **Writes return a proposal**; `execute()` needs a named approver. |
 | `src/support_triage/costs.py` | Token and dollar accounting, and a per-case cap that stops a run rather than overspending it. |
 | `src/support_triage/web.py` | The thin web UI (M3): one page, no framework. Triage a case, see the record, approve a proposal by name — the approve endpoint executes a proposal out of the server's own record, so a browser can never invent a state change. |
+| `src/support_triage/traces.py` | OTEL traces (M4): every triage flushes a span tree to `results/traces/<case>-<stamp>.json` — nodes, both model calls (with tier and tokens), repairs, and durations. Real opentelemetry-api/sdk, no collector. |
 
 ## The cases worth looking at
 
@@ -67,10 +68,11 @@ caveats, what the routing experiment showed, and how to pick the work back up.
 
 ## Status
 
-**M0 done, the eval (M5) runs, the routing question is measured, and the web UI (M3) is built.**
-Built: the mock support org, the citable policy corpus, the LangGraph graph, model routing, the
-approval gate, cost accounting with a per-case cap, the CLI, the thin web UI (`just web`), 21
-offline tests, and `just eval` over all ten cases with held-out truth.
+**M0 done, the eval (M5) runs, routing is measured, the web UI (M3) and OTEL traces (M4) are
+built.** Built: the mock support org, the citable policy corpus, the LangGraph graph, model
+routing, the approval gate, cost accounting with a per-case cap, the CLI, the thin web UI
+(`just web`), span-tree traces on every run, 23 offline tests, and `just eval` over all ten
+cases with held-out truth.
 
 The routing experiment (real API, all ten cases, 2026-10-12). "Pre-fix" rows ran before the
 retrieval fix below; "post-fix" rows after:
@@ -97,6 +99,6 @@ right 12h "corrected" into a wrong 1h. Security cases have a defined severity (`
 Sev2), and the repair path survives an exception raised bare (an empty `args` tuple used to crash
 the repair itself, mid-eval).
 
-**Not built yet:** OpenTelemetry traces (M4), a wider case set, the CDK stack (M6).
+**Not built yet:** a wider case set, the CDK stack (M6).
 
 **Deliberately not built:** MCP, authentication, multi-tenancy, anything persistent, fine-tuning.

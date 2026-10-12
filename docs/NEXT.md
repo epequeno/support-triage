@@ -28,7 +28,8 @@ epistemics-heavy habit was explicitly set aside.)
 | `cli.py` | `triage CASE-1041 [--tier strong|--approve-as NAME]`. |
 | `eval.py` | `just eval` — all ten cases scored against held-out truth, with cost. |
 | `web.py` | The thin web UI (M3, 2026-10-12): one page, no framework. The approve endpoint executes the server's own record — a browser cannot invent a state change. |
-| tests | 21 offline tests, fake model, no key, no spend. |
+| `traces.py` | OTEL traces (M4, 2026-10-12): every triage flushes a span tree to `results/traces/` — nodes, model calls with tier/tokens, repairs, durations. Real OTel api+sdk, no collector. |
+| tests | 23 offline tests, fake model, no key, no spend. |
 
 ## The routing experiment: measured (2026-10-12)
 
@@ -123,21 +124,20 @@ operating cost of the current configuration.
 ```bash
 cd ~/code/support-triage
 just sync && just seed        # if supportorg.db is missing (it is gitignored)
-just test                     # 21 offline tests, no key needed
+just test                     # 23 offline tests, no key needed
 just triage CASE-1047         # a declared-Severity-1 case on a non-production workload
 just eval                     # the ten-case table, live, real spend (~$0.30)
 just eval --tier cheap        # the same table for $0.0028 — useful for prompt work
 just web                      # the thin UI: triage a case, approve a proposal as a named human
 ```
 
-**Next, in order:** OTEL traces (M4) — spans for the two model calls and the nodes between them,
-so a triage can be read as a trace rather than a wall of text. Then the CDK stack and one real
-deploy-and-destroy (M6): container, one VPC, the app behind it, torn down after the screenshot.
-The web UI (M3) landed 2026-10-12: `just web`, one page, no framework — triage a case, see the
-whole record (routing reasons, cost, corrections, citations), approve a proposal as a named human,
-see the audit trail. The approve endpoint executes the proposal out of the *server's* in-memory
-record, not the request body, so the browser cannot invent a state change. With the routed eval at
-50/50, the interesting open question is stability under variance: rerun `just eval` a few times and
-see what a *distribution* over the ten cases looks like, before widening the case set.
+**Next, in order:** the CDK stack and one real deploy-and-destroy (M6) — container, one VPC, the
+app behind it, the UI photographed in the cloud, torn down after the screenshot. OTEL traces (M4)
+landed 2026-10-12: real `opentelemetry-api`+`sdk`, no collector — every triage (CLI, web, eval)
+flushes a span tree to `results/traces/<case>-<stamp>.json`: the seven nodes, both model calls with
+tier and tokens, repairs, durations. It paid for itself immediately — the first live trace showed
+a 1.3s repair call inside classify that the record's notes mention only in passing. With the
+routed eval at 50/50, the remaining open question is stability under variance: rerun `just eval` a
+few times and see what a *distribution* over the ten cases looks like, before widening the case set.
 
 **Local git only — the repo is not published.** Publishing is M7 and has not been decided.
