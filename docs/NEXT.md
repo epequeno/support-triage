@@ -175,5 +175,7 @@ The M4 note stands: traces land in `results/traces/` on every run (gitignored). 
 wobble (`CASE-1046`) is a two-line corpus fix in `POL-SCOPE-1` whenever someone wants a
 perfect-case-in-every-run claim, which is not a claim worth making.
 
-**On GitHub at `epequeno/support-triage`** — the repo is remote-backed now; M7 (making it public,
-polishing the README for strangers) is still undecided.
+**M7: done (2026-10-12).** The repo is **public** at `epequeno/support-triage` — pre-publish audit
+clean (no secrets, no absolute paths, no identity strings beyond the MIT LICENSE name, no large
+files), README carries the deploy story with the API-key caveat spelled out so nobody copies the
+task-definition shortcut, MIT license added. Nothing is left in flight in this repo.
