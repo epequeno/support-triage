@@ -19,5 +19,8 @@ eval *ARGS:
 test:
     @uv run pytest -q
 
+web:
+    @uv run uvicorn support_triage.web:app --port 8000
+
 check: test
     @uv run python -m support_triage.costs
