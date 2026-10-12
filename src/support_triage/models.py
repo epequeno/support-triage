@@ -6,6 +6,8 @@ shaped like the real thing, because the point of the exercise is a realistic bus
 
 from __future__ import annotations
 
+import re
+
 from enum import StrEnum
 
 from pydantic import BaseModel, Field, field_validator
@@ -113,7 +115,6 @@ class Classification(BaseModel):
         text = str(v).strip().lower()
         if text in {"none", "n/a", "no sla", "not applicable", ""}:
             return None
-        import re
         m = re.search(r"(\d+(?:\.\d+)?)", text)
         if not m:
             return None
@@ -124,6 +125,17 @@ class Classification(BaseModel):
             return value * 24
         return value
 
+
+    @field_validator("citations", mode="before")
+    @classmethod
+    def _normalise_citation_ids(cls, v):
+        """Models wrap ids in brackets or quotes ('[POL-SEV-1]', '\"POL-SLA-1\"') often enough that
+        the repair loop exists to absorb it. Normalise instead: an id is 'POL-' plus a bare token,
+        and the citation gate does the real validation."""
+        if not isinstance(v, list):
+            return v
+        return [re.sub(r"[^A-Z0-9-]", "", str(c).upper()) if str(c).upper().startswith(("[", '"', "POL"))
+                else c for c in v]
 
 class Proposal(BaseModel):
     """A state change the agent wants to make. It cannot make it. A human does, explicitly."""

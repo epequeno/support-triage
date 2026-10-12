@@ -60,28 +60,36 @@ case text ─▶ gather ─▶ route ─▶ retrieve ─▶ classify ─▶ draf
 
 ## Where this stands, and what is next
 
-[`docs/NEXT.md`](docs/NEXT.md) is the handoff: what is built, the first measured numbers with their
-caveats, the three findings worth acting on in order, and how to pick the work back up.
+[`docs/NEXT.md`](docs/NEXT.md) is the handoff: what is built, the measured numbers with their
+caveats, what the routing experiment showed, and how to pick the work back up.
 
 ## Status
 
-**M0 done, and an early version of the eval (M5) already runs.** Built: the mock support org, the
-citable policy corpus, the LangGraph graph, model routing, the approval gate, cost accounting with a
-per-case cap, the CLI, 16 offline tests, and `just eval` over all ten cases with held-out truth.
+**M0 done, the eval (M5) runs, and the routing question is measured.** Built: the mock support org,
+the citable policy corpus, the LangGraph graph, model routing, the approval gate, cost accounting
+with a per-case cap, the CLI, 19 offline tests, and `just eval` over all ten cases with held-out
+truth.
 
-First measured run (routed, real API, 2026-10-11):
+The routing experiment (real API, all ten cases, 2026-10-12):
 
-| axis | score | read it as |
-|---|---|---|
-| first-response target | **10/10** | **partly self-fulfilling** — the corpus corrects a wrong target, so this measures "never promises a wrong number", not "the model knows the matrix" |
-| in scope | 9/10 | the miss is a Basic account filing a technical case |
-| next action | 8/10 | one over-eager incident link, one missed entitlement |
-| citations | 9/10 | one verdict cited a policy id that does not exist, caught by the gate |
-| severity | 7/10 | two of the three misses are **security cases, where the corpus never defines a severity at all** — the label is contestable, not just the model |
+| run | severity | in scope | sla | action | citations | cost |
+|---|---|---|---|---|---|---|
+| forced cheap | 7/10 | 8/10 | 8/10 | 8/10 | 8/10 | **$0.0024** |
+| forced strong | 7/10 | 8/10 | 8/10 | 8/10 | 8/10 | $0.51 |
+| routed | **9/10** | **9/10** | **10/10** | **9/10** | **9/10** | $0.33 |
 
-Cost: **$0.33 for ten cases**, 8 of which routed to the strong model. That split is the next thing to
-fix: with 8/10 escalated the router is not yet earning its place, and the one case that routed cheap
-and failed (entitlement on a Basic account) is evidence it under-escalated.
+Forced cheap and forced strong tied on **every** axis at a 214× cost difference: on this case set
+the strong model buys nothing aggregate. The router's value is narrower than "better model": it
+sends the two signals that actually need it (security language, open incidents) to strong and lets
+the rest go cheap. The routed row is one run of a non-deterministic model at n=10 — treat ±1-2
+points between runs as noise, not signal.
+
+The one systematic miss is `CASE-1042` (a Basic account filing a technical case): every tier
+answers it wrong, so it is a prompt problem, not a model-choice problem. The `sla` axis remains
+partly self-fulfilling — the corpus corrects a wrong target — but the correction is now earned: a
+cited override (incident, security, out of scope) applies only when the gathered facts support it,
+after a model citing the incident override on an unrelated case had a right 12h "corrected" into a
+wrong 1h. Security cases have a defined severity (`POL-SEC-1`: Sev2) — that gap is closed.
 
 **Not built yet:** the web UI (M3), OpenTelemetry traces (M4), a wider case set, the CDK stack (M6).
 

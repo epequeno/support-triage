@@ -1,0 +1,252 @@
+{
+  "cases": 10,
+  "tier": "cheap",
+  "totals": {
+    "severity": 7,
+    "in_scope": 8,
+    "sla": 8,
+    "action": 8,
+    "citations": 8
+  },
+  "accuracy": {
+    "severity": 0.7,
+    "in_scope": 0.8,
+    "sla": 0.8,
+    "action": 0.8,
+    "citations": 0.8
+  },
+  "cost_usd": 0.002388,
+  "tiers": {
+    "cheap": 10
+  },
+  "rows": [
+    {
+      "case": "CASE-1041",
+      "account": "ACC-1001",
+      "plan": "Business",
+      "severity": "Sev1",
+      "expected": "Sev1",
+      "sla": 1.0,
+      "expected_sla": 1.0,
+      "action": "escalate",
+      "expected_action": "escalate",
+      "tier": "cheap",
+      "cost_usd": 0.00024,
+      "score": {
+        "severity": true,
+        "in_scope": true,
+        "sla": true,
+        "action": true,
+        "citations": true
+      },
+      "notes": [],
+      "proposals": 1
+    },
+    {
+      "case": "CASE-1042",
+      "account": "ACC-1003",
+      "plan": "Basic",
+      "severity": "Sev3",
+      "expected": "Sev4",
+      "sla": null,
+      "expected_sla": null,
+      "action": "respond",
+      "expected_action": "out_of_scope",
+      "tier": "cheap",
+      "cost_usd": 0.000232,
+      "score": {
+        "severity": false,
+        "in_scope": false,
+        "sla": true,
+        "action": false,
+        "citations": false
+      },
+      "notes": [
+        "sla corrected: model said 72.0, corpus says None for Basic/Sev3"
+      ],
+      "proposals": 0
+    },
+    {
+      "case": "CASE-1043",
+      "account": "ACC-1002",
+      "plan": "Enterprise",
+      "severity": "Sev2",
+      "expected": "Sev2",
+      "sla": 1.0,
+      "expected_sla": 1.0,
+      "action": "link_incident",
+      "expected_action": "link_incident",
+      "tier": "cheap",
+      "cost_usd": 0.000278,
+      "score": {
+        "severity": true,
+        "in_scope": true,
+        "sla": true,
+        "action": true,
+        "citations": true
+      },
+      "notes": [],
+      "proposals": 1
+    },
+    {
+      "case": "CASE-1044",
+      "account": "ACC-1004",
+      "plan": "Developer",
+      "severity": "Sev3",
+      "expected": "Sev3",
+      "sla": 1.0,
+      "expected_sla": 1.0,
+      "action": "link_incident",
+      "expected_action": "link_incident",
+      "tier": "cheap",
+      "cost_usd": 0.000263,
+      "score": {
+        "severity": true,
+        "in_scope": true,
+        "sla": true,
+        "action": true,
+        "citations": true
+      },
+      "notes": [
+        "sla corrected: model said 48.0, corpus says 1.0 for Developer/Sev3"
+      ],
+      "proposals": 1
+    },
+    {
+      "case": "CASE-1045",
+      "account": "ACC-1006",
+      "plan": "Enterprise",
+      "severity": "Sev1",
+      "expected": "Sev2",
+      "sla": 0.25,
+      "expected_sla": 0.25,
+      "action": "escalate",
+      "expected_action": "escalate",
+      "tier": "cheap",
+      "cost_usd": 0.000233,
+      "score": {
+        "severity": false,
+        "in_scope": true,
+        "sla": true,
+        "action": true,
+        "citations": true
+      },
+      "notes": [],
+      "proposals": 1
+    },
+    {
+      "case": "CASE-1046",
+      "account": "ACC-1005",
+      "plan": "Business",
+      "severity": "Sev4",
+      "expected": "Sev4",
+      "sla": null,
+      "expected_sla": 24.0,
+      "action": "respond",
+      "expected_action": "respond",
+      "tier": "cheap",
+      "cost_usd": 0.000241,
+      "score": {
+        "severity": true,
+        "in_scope": true,
+        "sla": false,
+        "action": true,
+        "citations": true
+      },
+      "notes": [
+        "sla corrected: model said 24.0, corpus says None for Business/Sev4"
+      ],
+      "proposals": 0
+    },
+    {
+      "case": "CASE-1047",
+      "account": "ACC-1007",
+      "plan": "Developer",
+      "severity": "Sev3",
+      "expected": "Sev3",
+      "sla": 48.0,
+      "expected_sla": 48.0,
+      "action": "respond",
+      "expected_action": "respond",
+      "tier": "cheap",
+      "cost_usd": 0.000228,
+      "score": {
+        "severity": true,
+        "in_scope": true,
+        "sla": true,
+        "action": true,
+        "citations": true
+      },
+      "notes": [
+        "sla corrected: model said 12.0, corpus says 48.0 for Developer/Sev3"
+      ],
+      "proposals": 1
+    },
+    {
+      "case": "CASE-1048",
+      "account": "ACC-1008",
+      "plan": "Basic",
+      "severity": "Sev4",
+      "expected": "Sev2",
+      "sla": null,
+      "expected_sla": 0.25,
+      "action": "out_of_scope",
+      "expected_action": "escalate",
+      "tier": "cheap",
+      "cost_usd": 0.000176,
+      "score": {
+        "severity": false,
+        "in_scope": false,
+        "sla": false,
+        "action": false,
+        "citations": false
+      },
+      "notes": [],
+      "proposals": 1
+    },
+    {
+      "case": "CASE-1049",
+      "account": "ACC-1001",
+      "plan": "Business",
+      "severity": "Sev1",
+      "expected": "Sev1",
+      "sla": 1.0,
+      "expected_sla": 1.0,
+      "action": "escalate",
+      "expected_action": "escalate",
+      "tier": "cheap",
+      "cost_usd": 0.000242,
+      "score": {
+        "severity": true,
+        "in_scope": true,
+        "sla": true,
+        "action": true,
+        "citations": true
+      },
+      "notes": [],
+      "proposals": 2
+    },
+    {
+      "case": "CASE-1050",
+      "account": "ACC-1002",
+      "plan": "Enterprise",
+      "severity": "Sev4",
+      "expected": "Sev4",
+      "sla": 12.0,
+      "expected_sla": 12.0,
+      "action": "respond",
+      "expected_action": "respond",
+      "tier": "cheap",
+      "cost_usd": 0.000255,
+      "score": {
+        "severity": true,
+        "in_scope": true,
+        "sla": true,
+        "action": true,
+        "citations": true
+      },
+      "notes": [],
+      "proposals": 0
+    }
+  ]
+}

@@ -147,9 +147,15 @@ class TriageAgent:
                 raise CitationError(f"verdict cites policy ids that do not exist: {still}")
 
         # The SLA table in the corpus is the source of truth. A number that disagrees with it is
-        # corrected and reported, never quietly accepted.
+        # corrected and reported, never quietly accepted. An override also has to be earned: the
+        # facts gathered for this case decide whether a cited override applies at all.
+        body = f"{context['case'].get('subject', '')} {context['case'].get('body', '')}".lower()
+        facts = {"open_incidents": bool(context.get("open_incidents")),
+                 "case_linked_to_incident": verdict.next_action == "link_incident",
+                 "security_report": any(t in body for t in router.SECURITY_TERMS),
+                 "out_of_scope": not verdict.in_scope}
         expected = policy.expected_sla(context["account"]["plan"], str(verdict.severity),
-                                       verdict.citations)
+                                       verdict.citations, facts=facts)
         if verdict.sla_response_hours != expected:
             notes.append(
                 f"sla corrected: model said {verdict.sla_response_hours}, corpus says {expected}"

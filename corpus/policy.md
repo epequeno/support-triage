@@ -39,7 +39,9 @@ target from this table for the account's plan and the classified severity.
 
 Suspected credential exposure, unauthorised access, data loss or abuse must be routed to the Security
 Response team within 15 minutes, on every plan including Basic. The target in POL-SLA-1 does not
-apply. The customer-facing response may acknowledge receipt and state that the security team is
+apply. A security report is classified **Sev2** while the security path is active, on every plan; it
+is raised to Sev1 only if a production workload is also fully unavailable under POL-SEV-1. The
+customer-facing response may acknowledge receipt and state that the security team is
 handling it; it must not discuss investigation detail, confirm or deny a breach, or promise a
 timeframe.
 

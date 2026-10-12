@@ -61,7 +61,9 @@ def unknown_ids(cited: list[str], corpus: Path | None = None) -> list[str]:
 
 
 # Targets that override the matrix, with the section that grants the override. The numbers live here
-# and not in the agent, so the corpus and the code cannot drift apart silently.
+# and not in the agent, so the corpus and the code cannot drift apart silently. An override is also
+# earned, not cited into existence: expected_sla honours one only if its precondition holds in the
+# gathered facts (see expected_sla).
 # None means the matrix does not apply at all: an out-of-scope case is closed, not answered late.
 SLA_OVERRIDES: dict[str, float | None] = {"POL-INC-1": 1.0, "POL-SEC-1": 0.25, "POL-SCOPE-1": None}
 
@@ -84,10 +86,23 @@ def sla_matrix(corpus: Path | None = None) -> dict[str, dict[str, float | None]]
 
 
 def expected_sla(plan: str, severity: str, citations: list[str],
-                 corpus: Path | None = None) -> float | None:
-    """What the first-response target should be, given the plan, the severity and the cited policy."""
+                 facts: dict | None = None, corpus: Path | None = None) -> float | None:
+    """What the first-response target should be, given the plan, the severity and the cited policy.
+
+    Without `facts`, a cited override is honoured — the corpus alone is the witness, which is what
+    the seeded-truth derivation needs. With `facts` from the gathered context, an override applies
+    only if its precondition holds: POL-INC-1 needs an open incident AND the verdict linking the
+    case to it (its own wording — symptom match is the model's call to make, and a mere citation
+    is not that call), POL-SEC-1 a security report, POL-SCOPE-1 an out-of-scope verdict. A
+    citation the facts do not support falls back to the matrix, where the usual correction logic
+    catches it.
+    """
+    gates = {"POL-INC-1": facts is None or (bool(facts.get("open_incidents"))
+                                            and bool(facts.get("case_linked_to_incident"))),
+             "POL-SEC-1": facts is None or bool(facts.get("security_report")),
+             "POL-SCOPE-1": facts is None or bool(facts.get("out_of_scope"))}
     for cited in citations:
-        if cited in SLA_OVERRIDES:
+        if cited in SLA_OVERRIDES and gates[cited]:
             return SLA_OVERRIDES[cited]
     return sla_matrix(corpus).get(plan, {}).get(severity)
 

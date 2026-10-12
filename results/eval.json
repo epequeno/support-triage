@@ -2,20 +2,20 @@
   "cases": 10,
   "tier": "routed",
   "totals": {
-    "severity": 7,
+    "severity": 9,
     "in_scope": 9,
-    "sla": 9,
+    "sla": 10,
     "action": 9,
     "citations": 9
   },
   "accuracy": {
-    "severity": 0.7,
+    "severity": 0.9,
     "in_scope": 0.9,
-    "sla": 0.9,
+    "sla": 1.0,
     "action": 0.9,
     "citations": 0.9
   },
-  "cost_usd": 0.39564,
+  "cost_usd": 0.325866,
   "tiers": {
     "strong": 8,
     "cheap": 2
@@ -32,7 +32,7 @@
       "action": "escalate",
       "expected_action": "escalate",
       "tier": "strong",
-      "cost_usd": 0.054252,
+      "cost_usd": 0.02924,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -40,9 +40,7 @@
         "action": true,
         "citations": true
       },
-      "notes": [
-        "repair attempt: CitationError: cited ids do not exist: ['[POL-SEV-1]', '[POL-SLA-1]', '[POL-ESC-1]', '[POL-PLAN-1]']"
-      ],
+      "notes": [],
       "proposals": 1
     },
     {
@@ -56,7 +54,7 @@
       "action": "respond",
       "expected_action": "out_of_scope",
       "tier": "cheap",
-      "cost_usd": 0.000232,
+      "cost_usd": 0.000256,
       "score": {
         "severity": false,
         "in_scope": false,
@@ -64,9 +62,7 @@
         "action": false,
         "citations": false
       },
-      "notes": [
-        "sla corrected: model said 72.0, corpus says None for Basic/Sev3"
-      ],
+      "notes": [],
       "proposals": 0
     },
     {
@@ -80,7 +76,7 @@
       "action": "link_incident",
       "expected_action": "link_incident",
       "tier": "strong",
-      "cost_usd": 0.03864,
+      "cost_usd": 0.037416,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -102,7 +98,7 @@
       "action": "link_incident",
       "expected_action": "link_incident",
       "tier": "strong",
-      "cost_usd": 0.040364,
+      "cost_usd": 0.03802,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -117,23 +113,24 @@
       "case": "CASE-1045",
       "account": "ACC-1006",
       "plan": "Enterprise",
-      "severity": "Sev4",
+      "severity": "Sev2",
       "expected": "Sev2",
       "sla": 0.25,
       "expected_sla": 0.25,
       "action": "escalate",
       "expected_action": "escalate",
       "tier": "strong",
-      "cost_usd": 0.055075,
+      "cost_usd": 0.066357,
       "score": {
-        "severity": false,
+        "severity": true,
         "in_scope": true,
         "sla": true,
         "action": true,
         "citations": true
       },
       "notes": [
-        "sla corrected: model said None, corpus says 0.25 for Enterprise/Sev4"
+        "repair attempt: CitationError: cited ids do not exist: ['[POL-SEC-1]', '[POL-SEV-2]', '[POL-SEV-1]', '[POL-INC-1]']",
+        "sla corrected: model said None, corpus says 0.25 for Enterprise/Sev2"
       ],
       "proposals": 2
     },
@@ -143,23 +140,20 @@
       "plan": "Business",
       "severity": "Sev4",
       "expected": "Sev4",
-      "sla": null,
+      "sla": 24.0,
       "expected_sla": 24.0,
       "action": "respond",
       "expected_action": "respond",
       "tier": "strong",
-      "cost_usd": 0.056305,
+      "cost_usd": 0.035399,
       "score": {
         "severity": true,
         "in_scope": true,
-        "sla": false,
+        "sla": true,
         "action": true,
         "citations": true
       },
-      "notes": [
-        "repair attempt: CitationError: cited ids do not exist: ['[POL-SEV-1]', '[POL-SEV-2]', '[POL-SLA-1]', '[POL-INC-1]', '[POL-SCOPE-1]']",
-        "sla corrected: model said 24.0, corpus says None for Business/Sev4"
-      ],
+      "notes": [],
       "proposals": 0
     },
     {
@@ -173,7 +167,29 @@
       "action": "respond",
       "expected_action": "respond",
       "tier": "cheap",
-      "cost_usd": 0.000228,
+      "cost_usd": 0.000256,
+      "score": {
+        "severity": true,
+        "in_scope": true,
+        "sla": true,
+        "action": true,
+        "citations": true
+      },
+      "notes": [],
+      "proposals": 1
+    },
+    {
+      "case": "CASE-1048",
+      "account": "ACC-1008",
+      "plan": "Basic",
+      "severity": "Sev2",
+      "expected": "Sev2",
+      "sla": 0.25,
+      "expected_sla": 0.25,
+      "action": "escalate",
+      "expected_action": "escalate",
+      "tier": "strong",
+      "cost_usd": 0.029542,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -182,31 +198,7 @@
         "citations": true
       },
       "notes": [
-        "sla corrected: model said 12.0, corpus says 48.0 for Developer/Sev3"
-      ],
-      "proposals": 1
-    },
-    {
-      "case": "CASE-1048",
-      "account": "ACC-1008",
-      "plan": "Basic",
-      "severity": "Sev1",
-      "expected": "Sev2",
-      "sla": 0.25,
-      "expected_sla": 0.25,
-      "action": "escalate",
-      "expected_action": "escalate",
-      "tier": "strong",
-      "cost_usd": 0.043255,
-      "score": {
-        "severity": false,
-        "in_scope": true,
-        "sla": true,
-        "action": true,
-        "citations": true
-      },
-      "notes": [
-        "sla corrected: model said None, corpus says 0.25 for Basic/Sev1"
+        "sla corrected: model said None, corpus says 0.25 for Basic/Sev2"
       ],
       "proposals": 1
     },
@@ -221,7 +213,7 @@
       "action": "escalate",
       "expected_action": "escalate",
       "tier": "strong",
-      "cost_usd": 0.059292,
+      "cost_usd": 0.047306,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -230,7 +222,7 @@
         "citations": true
       },
       "notes": [
-        "repair attempt: CitationError: cited ids do not exist: ['[POL-SEV-1]', '[POL-SEV-2]', '[POL-SLA-1]', '[POL-ESC-1]', '[POL-INC-1]']"
+        "repair attempt: CitationError: cited ids do not exist: ['[POL-SEV-1]', '[POL-SEV-2]', '[POL-SLA-1]', '[POL-ESC-1]']"
       ],
       "proposals": 2
     },
@@ -245,7 +237,7 @@
       "action": "respond",
       "expected_action": "respond",
       "tier": "strong",
-      "cost_usd": 0.047997,
+      "cost_usd": 0.042074,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -253,9 +245,7 @@
         "action": true,
         "citations": true
       },
-      "notes": [
-        "repair attempt: CitationError: cited ids do not exist: ['[POL-SEV-1]', '[POL-SEV-2]', '[POL-SLA-1]']"
-      ],
+      "notes": [],
       "proposals": 0
     }
   ]

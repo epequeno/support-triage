@@ -116,6 +116,29 @@ def test_a_wrong_sla_is_corrected_by_the_corpus_and_reported(conn):
     assert any("sla corrected" in n for n in record.notes)
 
 
+def test_an_override_cited_without_its_precondition_falls_back_to_the_matrix():
+    """CASE-1050 happened: a model cited the incident override on a question without linking the
+    case to it, and the gate 'corrected' a right 12h into a wrong 1h. Overrides are earned, not
+    cited: the policy requires symptom match, and the verdict's own action is the record of it."""
+    incident = {"incident_id": "INC-7001"}  # open in the region, but the case is not linked to it
+    unlinked = policy.expected_sla("Enterprise", "Sev4", ["POL-INC-1"],
+                                   facts={"open_incidents": [incident], "case_linked_to_incident": False})
+    linked = policy.expected_sla("Enterprise", "Sev4", ["POL-INC-1"],
+                                 facts={"open_incidents": [incident], "case_linked_to_incident": True})
+    assert unlinked == 12.0, "Enterprise Sev4 is 12h; POL-INC-1 without a linked case must not shorten it"
+    assert linked == 1.0, "a case actually linked to an open incident gets the 1h acknowledgement"
+
+
+def test_an_unearned_incident_citation_is_corrected_end_to_end(conn):
+    verdict = Classification(severity=Severity.SEV4, in_scope=True, sla_response_hours=1.0,
+                             next_action="respond", citations=["POL-SEV-1", "POL-INC-1"])
+    agent = make_agent("strong", verdict)
+    agent.conn = conn
+    record = agent.triage("CASE-1050")  # Enterprise Sev4 question; INC-7001 is open but not linked
+    assert record.sla_response_hours == 12.0
+    assert any("sla corrected" in n for n in record.notes)
+
+
 def test_a_declared_severity_differing_from_the_classification_proposes_a_change(conn):
     verdict = Classification(severity=Severity.SEV3, in_scope=True, sla_response_hours=48.0,
                              next_action="respond", citations=["POL-SEV-1", "POL-SEV-2", "POL-SLA-1"])
@@ -157,6 +180,19 @@ def test_a_citation_that_does_not_exist_fails_the_case(conn):
     with pytest.raises(CitationError, match="POL-MADE-UP"):
         agent.triage("CASE-1041")
 
+
+
+def test_bracketed_citation_ids_are_normalised_not_repaired(conn):
+    """The strong model intermittently wraps ids in brackets or quotes. Normalising at the interface
+    is free; a repair round-trip is a second model call."""
+    verdict = Classification(severity=Severity.SEV4, in_scope=True, sla_response_hours=12.0,
+                             next_action="respond", citations=["[POL-SEV-1]", '"POL-SLA-1"'])
+    assert verdict.citations == ["POL-SEV-1", "POL-SLA-1"]
+    agent = make_agent("strong", verdict)
+    agent.conn = conn
+    record = agent.triage("CASE-1050")
+    assert record.sla_response_hours == 12.0
+    assert not any("repair" in n for n in record.notes)
 
 def test_the_repair_path_recovers_once_and_records_that_it_did(conn):
     bad = Classification(severity=Severity.SEV1, in_scope=True, sla_response_hours=1.0,
