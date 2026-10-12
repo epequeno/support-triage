@@ -58,6 +58,11 @@ case text ─▶ gather ─▶ route ─▶ retrieve ─▶ classify ─▶ draf
 | `CASE-1049` | The customer declares Sev2 on a production outage. Raised, not accepted. |
 | `CASE-1043` · `CASE-1044` | Open incidents that supersede the case clock. |
 
+## Where this stands, and what is next
+
+[`docs/NEXT.md`](docs/NEXT.md) is the handoff: what is built, the first measured numbers with their
+caveats, the three findings worth acting on in order, and how to pick the work back up.
+
 ## Status
 
 **M0 done, and an early version of the eval (M5) already runs.** Built: the mock support org, the
