@@ -158,11 +158,12 @@ just web                      # the thin UI: triage a case, approve a proposal a
 credentials live on the other system, and CDK iterates fastest written against a real account.
 The plan stays as decided: container, one VPC, the app behind it, the UI photographed in the
 cloud, torn down after the screenshot, **not** over-productionised, deploy once for real.
-Before starting there: this repo is local to this machine — move it with
-`git bundle create support-triage.bundle main` (or push to a private remote), then `just sync &&`
-`just seed && just test` to confirm the baseline. The M4 note: traces land in `results/traces/`
-on every run (gitignored) and `just triage` prints the path. The distribution question is
-answered above; the one known wobble (`CASE-1046`) is a two-line corpus fix in `POL-SCOPE-1`
-whenever someone wants a perfect-case-in-every-run claim, which is not a claim worth making.
+Before starting there: the repo is on GitHub (`epequeno/support-triage`, pushed through `f0cd9e2`
+on 2026-10-12) — clone it there, then `just sync && just seed && just test` to confirm the
+baseline. The M4 note: traces land in `results/traces/` on every run (gitignored) and
+`just triage` prints the path. The distribution question is answered above; the one known wobble
+(`CASE-1046`) is a two-line corpus fix in `POL-SCOPE-1` whenever someone wants a
+perfect-case-in-every-run claim, which is not a claim worth making.
 
-**Local git only — the repo is not published.** Publishing is M7 and has not been decided.
+**On GitHub at `epequeno/support-triage`** — the repo is remote-backed now; M7 (making it public,
+polishing the README for strangers) is still undecided.
