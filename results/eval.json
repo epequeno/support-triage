@@ -2,20 +2,20 @@
   "cases": 10,
   "tier": "routed",
   "totals": {
-    "severity": 9,
-    "in_scope": 9,
+    "severity": 10,
+    "in_scope": 10,
     "sla": 10,
-    "action": 9,
-    "citations": 9
+    "action": 10,
+    "citations": 10
   },
   "accuracy": {
-    "severity": 0.9,
-    "in_scope": 0.9,
+    "severity": 1.0,
+    "in_scope": 1.0,
     "sla": 1.0,
-    "action": 0.9,
-    "citations": 0.9
+    "action": 1.0,
+    "citations": 1.0
   },
-  "cost_usd": 0.325866,
+  "cost_usd": 0.298725,
   "tiers": {
     "strong": 8,
     "cheap": 2
@@ -32,7 +32,7 @@
       "action": "escalate",
       "expected_action": "escalate",
       "tier": "strong",
-      "cost_usd": 0.02924,
+      "cost_usd": 0.036693,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -47,23 +47,23 @@
       "case": "CASE-1042",
       "account": "ACC-1003",
       "plan": "Basic",
-      "severity": "Sev3",
+      "severity": "Sev4",
       "expected": "Sev4",
       "sla": null,
       "expected_sla": null,
-      "action": "respond",
+      "action": "out_of_scope",
       "expected_action": "out_of_scope",
       "tier": "cheap",
-      "cost_usd": 0.000256,
+      "cost_usd": 0.000234,
       "score": {
-        "severity": false,
-        "in_scope": false,
+        "severity": true,
+        "in_scope": true,
         "sla": true,
-        "action": false,
-        "citations": false
+        "action": true,
+        "citations": true
       },
       "notes": [],
-      "proposals": 0
+      "proposals": 1
     },
     {
       "case": "CASE-1043",
@@ -76,7 +76,7 @@
       "action": "link_incident",
       "expected_action": "link_incident",
       "tier": "strong",
-      "cost_usd": 0.037416,
+      "cost_usd": 0.035657,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -98,7 +98,7 @@
       "action": "link_incident",
       "expected_action": "link_incident",
       "tier": "strong",
-      "cost_usd": 0.03802,
+      "cost_usd": 0.040731,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -120,7 +120,7 @@
       "action": "escalate",
       "expected_action": "escalate",
       "tier": "strong",
-      "cost_usd": 0.066357,
+      "cost_usd": 0.037815,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -129,7 +129,6 @@
         "citations": true
       },
       "notes": [
-        "repair attempt: CitationError: cited ids do not exist: ['[POL-SEC-1]', '[POL-SEV-2]', '[POL-SEV-1]', '[POL-INC-1]']",
         "sla corrected: model said None, corpus says 0.25 for Enterprise/Sev2"
       ],
       "proposals": 2
@@ -145,7 +144,7 @@
       "action": "respond",
       "expected_action": "respond",
       "tier": "strong",
-      "cost_usd": 0.035399,
+      "cost_usd": 0.031074,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -167,7 +166,7 @@
       "action": "respond",
       "expected_action": "respond",
       "tier": "cheap",
-      "cost_usd": 0.000256,
+      "cost_usd": 0.000267,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -189,7 +188,7 @@
       "action": "escalate",
       "expected_action": "escalate",
       "tier": "strong",
-      "cost_usd": 0.029542,
+      "cost_usd": 0.043914,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -213,7 +212,7 @@
       "action": "escalate",
       "expected_action": "escalate",
       "tier": "strong",
-      "cost_usd": 0.047306,
+      "cost_usd": 0.036055,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -221,9 +220,7 @@
         "action": true,
         "citations": true
       },
-      "notes": [
-        "repair attempt: CitationError: cited ids do not exist: ['[POL-SEV-1]', '[POL-SEV-2]', '[POL-SLA-1]', '[POL-ESC-1]']"
-      ],
+      "notes": [],
       "proposals": 2
     },
     {
@@ -237,7 +234,7 @@
       "action": "respond",
       "expected_action": "respond",
       "tier": "strong",
-      "cost_usd": 0.042074,
+      "cost_usd": 0.036285,
       "score": {
         "severity": true,
         "in_scope": true,

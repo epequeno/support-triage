@@ -67,29 +67,33 @@ caveats, what the routing experiment showed, and how to pick the work back up.
 
 **M0 done, the eval (M5) runs, and the routing question is measured.** Built: the mock support org,
 the citable policy corpus, the LangGraph graph, model routing, the approval gate, cost accounting
-with a per-case cap, the CLI, 19 offline tests, and `just eval` over all ten cases with held-out
+with a per-case cap, the CLI, 21 offline tests, and `just eval` over all ten cases with held-out
 truth.
 
-The routing experiment (real API, all ten cases, 2026-10-12):
+The routing experiment (real API, all ten cases, 2026-10-12). "Pre-fix" rows ran before the
+retrieval fix below; "post-fix" rows after:
 
 | run | severity | in scope | sla | action | citations | cost |
 |---|---|---|---|---|---|---|
-| forced cheap | 7/10 | 8/10 | 8/10 | 8/10 | 8/10 | **$0.0024** |
-| forced strong | 7/10 | 8/10 | 8/10 | 8/10 | 8/10 | $0.51 |
-| routed | **9/10** | **9/10** | **10/10** | **9/10** | **9/10** | $0.33 |
+| forced cheap (pre-fix) | 7/10 | 8/10 | 8/10 | 8/10 | 8/10 | **$0.0024** |
+| forced strong (pre-fix) | 7/10 | 8/10 | 8/10 | 8/10 | 8/10 | $0.51 |
+| forced cheap (post-fix) | 9/10 | 10/10 | 10/10 | 8/10 | 9/10 | **$0.0028** |
+| routed (post-fix) | **10/10** | **10/10** | **10/10** | **10/10** | **10/10** | $0.30 |
 
-Forced cheap and forced strong tied on **every** axis at a 214× cost difference: on this case set
-the strong model buys nothing aggregate. The router's value is narrower than "better model": it
-sends the two signals that actually need it (security language, open incidents) to strong and lets
-the rest go cheap. The routed row is one run of a non-deterministic model at n=10 — treat ±1-2
-points between runs as noise, not signal.
+Two results, not one. First: **a large share of the early misses were retrieval, not models.** The
+lexical retriever's top-6 cut hid the scope rules from every tier — `CASE-1042` failed everywhere
+because `POL-PLAN-1` and `POL-SCOPE-1` never reached the model, and no tier can cite a rule it
+cannot see. The corpus is eight sections; it now renders in full, ranked, and the routed run is a
+perfect 50/50 at $0.30. Second: even with everything visible, forced cheap gives up one to two
+points (security handling) at 1% of routed's cost — that residual gap is what the router is for.
+One run per cell, non-deterministic model, n=10: ±1-2 points is noise.
 
-The one systematic miss is `CASE-1042` (a Basic account filing a technical case): every tier
-answers it wrong, so it is a prompt problem, not a model-choice problem. The `sla` axis remains
-partly self-fulfilling — the corpus corrects a wrong target — but the correction is now earned: a
-cited override (incident, security, out of scope) applies only when the gathered facts support it,
-after a model citing the incident override on an unrelated case had a right 12h "corrected" into a
-wrong 1h. Security cases have a defined severity (`POL-SEC-1`: Sev2) — that gap is closed.
+The `sla` axis remains partly self-fulfilling — the corpus corrects a wrong target — but the
+correction is now earned: a cited override (incident, security, out of scope) applies only when the
+gathered facts support it, after a model citing the incident override on an unrelated case had a
+right 12h "corrected" into a wrong 1h. Security cases have a defined severity (`POL-SEC-1`:
+Sev2), and the repair path survives an exception raised bare (an empty `args` tuple used to crash
+the repair itself, mid-eval).
 
 **Not built yet:** the web UI (M3), OpenTelemetry traces (M4), a wider case set, the CDK stack (M6).
 

@@ -69,6 +69,14 @@ def test_the_matrix_has_all_four_plans_and_basic_is_unentitled():
     assert matrix["Enterprise"]["Sev1"] == 0.25
 
 
+def test_the_model_sees_every_citable_section():
+    """CASE-1042 failed in every tier because lexical retrieval's top-6 hid POL-PLAN-1 and
+    POL-SCOPE-1: no tier can cite a rule it cannot see. The corpus is small enough to render in
+    full — this pins that, so truncation cannot silently return."""
+    hits = tools.search_policy("How do I resize an instance? Site also feels slow")
+    assert {h["policy_id"] for h in hits} == set(policy.index())
+
+
 # ── routing ──────────────────────────────────────────────────────────────────────────────────────
 
 def test_security_language_routes_to_the_strong_model():
@@ -203,6 +211,30 @@ def test_the_repair_path_recovers_once_and_records_that_it_did(conn):
     agent.conn = conn
     record = agent.triage("CASE-1041")
     assert record.citations == ["POL-SEV-1", "POL-SLA-1"]
+    assert any("repair attempt" in n for n in record.notes)
+
+
+def test_the_repair_path_survives_an_exception_raised_bare(conn):
+    """CASE-1048 crashed a live run: the model produced something that raised an exception with
+    empty args, and the repair died on exc.args[0] before it could do its job. Repairing must
+    never be the thing that fails."""
+    good = Classification(severity=Severity.SEV1, in_scope=True, sla_response_hours=1.0,
+                          next_action="respond", citations=["POL-SEV-1", "POL-SLA-1"])
+
+    class BareThenGood(FakeCaller):
+        def __init__(self):
+            super().__init__("strong", good)
+            self.raised = False
+
+        def classify(self, context, candidates):
+            if not self.raised:
+                self.raised = True
+                raise RuntimeError  # raised bare: args == ()
+            return super().classify(context, candidates)
+
+    agent = TriageAgent(conn=conn, callers={"cheap": BareThenGood(), "strong": BareThenGood()})
+    record = agent.triage("CASE-1041")
+    assert record.severity is Severity.SEV1
     assert any("repair attempt" in n for n in record.notes)
 
 

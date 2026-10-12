@@ -122,7 +122,7 @@ class TriageAgent:
     def _retrieve(self, state: TriageState) -> TriageState:
         context = state["context"]
         query = f"{context['case']['subject']} {context['case']['body']} severity response target escalation"
-        hits = tools.search_policy(query, k=6)
+        hits = tools.search_policy(query)
         return {"candidates": hits}
 
     def _classify(self, state: TriageState) -> TriageState:
@@ -172,8 +172,10 @@ class TriageAgent:
         valid = sorted(policy.index())
         detail = str(exc)
         repair = {"valid_ids": valid,
+                  # str(exc), not exc.args[0]: an exception raised bare has empty args, and the
+                  # repair path must never crash while repairing (CASE-1048, 2026-10-12).
                   "unknown_citations": [i for i in policy.unknown_ids(
-                      getattr(exc, "args", [""])[0].replace(",", " ").split()) if i.startswith("POL-")],
+                      detail.replace(",", " ").split()) if i.startswith("POL-")],
                   "validation_error": detail[:300]}
         notes.append(f"repair attempt: {type(exc).__name__}: {detail[:120]}")
         return caller.classify({**context, "repair": repair}, candidates)

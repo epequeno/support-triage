@@ -43,15 +43,14 @@ def terms(text: str) -> set[str]:
     return {w for w in words if w not in _STOP and len(w) > 2}
 
 
-def retrieve(query: str, k: int = 6, corpus: Path | None = None) -> list[PolicyLine]:
-    """Top-k sections by term overlap. Deterministic; ties broken by id so runs are reproducible."""
-    scored: list[tuple[int, str, PolicyLine]] = []
+def retrieve(query: str, k: int | None = None, corpus: Path | None = None) -> list[PolicyLine]:
+    """Sections ranked by term overlap, top-k (all when k is unset). Zero-overlap sections rank
+    last instead of vanishing: a section the query never mentions can still be the rule that
+    decides the case — CASE-1042's scope rules never matched its text. Deterministic; ties
+    broken by id so runs are reproducible."""
     q = terms(query)
-    for line in load(corpus):
-        overlap = len(q & terms(line.text + " " + line.section))
-        if overlap:
-            scored.append((-overlap, line.policy_id, line))
-    scored.sort()
+    scored = sorted((-len(q & terms(line.text + " " + line.section)), line.policy_id, line)
+                    for line in load(corpus))
     return [line for _, _, line in scored[:k]]
 
 

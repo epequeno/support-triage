@@ -2,20 +2,20 @@
   "cases": 10,
   "tier": "cheap",
   "totals": {
-    "severity": 7,
-    "in_scope": 8,
-    "sla": 8,
+    "severity": 9,
+    "in_scope": 10,
+    "sla": 10,
     "action": 8,
-    "citations": 8
+    "citations": 9
   },
   "accuracy": {
-    "severity": 0.7,
-    "in_scope": 0.8,
-    "sla": 0.8,
+    "severity": 0.9,
+    "in_scope": 1.0,
+    "sla": 1.0,
     "action": 0.8,
-    "citations": 0.8
+    "citations": 0.9
   },
-  "cost_usd": 0.002388,
+  "cost_usd": 0.002799,
   "tiers": {
     "cheap": 10
   },
@@ -31,7 +31,7 @@
       "action": "escalate",
       "expected_action": "escalate",
       "tier": "cheap",
-      "cost_usd": 0.00024,
+      "cost_usd": 0.000301,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -46,25 +46,23 @@
       "case": "CASE-1042",
       "account": "ACC-1003",
       "plan": "Basic",
-      "severity": "Sev3",
+      "severity": "Sev4",
       "expected": "Sev4",
       "sla": null,
       "expected_sla": null,
-      "action": "respond",
+      "action": "out_of_scope",
       "expected_action": "out_of_scope",
       "tier": "cheap",
-      "cost_usd": 0.000232,
+      "cost_usd": 0.000234,
       "score": {
-        "severity": false,
-        "in_scope": false,
+        "severity": true,
+        "in_scope": true,
         "sla": true,
-        "action": false,
-        "citations": false
+        "action": true,
+        "citations": true
       },
-      "notes": [
-        "sla corrected: model said 72.0, corpus says None for Basic/Sev3"
-      ],
-      "proposals": 0
+      "notes": [],
+      "proposals": 1
     },
     {
       "case": "CASE-1043",
@@ -77,7 +75,7 @@
       "action": "link_incident",
       "expected_action": "link_incident",
       "tier": "cheap",
-      "cost_usd": 0.000278,
+      "cost_usd": 0.000289,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -99,7 +97,7 @@
       "action": "link_incident",
       "expected_action": "link_incident",
       "tier": "cheap",
-      "cost_usd": 0.000263,
+      "cost_usd": 0.000292,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -120,19 +118,19 @@
       "expected": "Sev2",
       "sla": 0.25,
       "expected_sla": 0.25,
-      "action": "escalate",
+      "action": "respond",
       "expected_action": "escalate",
       "tier": "cheap",
-      "cost_usd": 0.000233,
+      "cost_usd": 0.000316,
       "score": {
         "severity": false,
         "in_scope": true,
         "sla": true,
-        "action": true,
+        "action": false,
         "citations": true
       },
       "notes": [],
-      "proposals": 1
+      "proposals": 0
     },
     {
       "case": "CASE-1046",
@@ -140,22 +138,20 @@
       "plan": "Business",
       "severity": "Sev4",
       "expected": "Sev4",
-      "sla": null,
+      "sla": 24.0,
       "expected_sla": 24.0,
       "action": "respond",
       "expected_action": "respond",
       "tier": "cheap",
-      "cost_usd": 0.000241,
+      "cost_usd": 0.000282,
       "score": {
         "severity": true,
         "in_scope": true,
-        "sla": false,
+        "sla": true,
         "action": true,
         "citations": true
       },
-      "notes": [
-        "sla corrected: model said 24.0, corpus says None for Business/Sev4"
-      ],
+      "notes": [],
       "proposals": 0
     },
     {
@@ -169,7 +165,7 @@
       "action": "respond",
       "expected_action": "respond",
       "tier": "cheap",
-      "cost_usd": 0.000228,
+      "cost_usd": 0.000232,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -177,32 +173,33 @@
         "action": true,
         "citations": true
       },
-      "notes": [
-        "sla corrected: model said 12.0, corpus says 48.0 for Developer/Sev3"
-      ],
+      "notes": [],
       "proposals": 1
     },
     {
       "case": "CASE-1048",
       "account": "ACC-1008",
       "plan": "Basic",
-      "severity": "Sev4",
+      "severity": "Sev2",
       "expected": "Sev2",
-      "sla": null,
+      "sla": 0.25,
       "expected_sla": 0.25,
-      "action": "out_of_scope",
+      "action": "respond",
       "expected_action": "escalate",
       "tier": "cheap",
-      "cost_usd": 0.000176,
+      "cost_usd": 0.000271,
       "score": {
-        "severity": false,
-        "in_scope": false,
-        "sla": false,
+        "severity": true,
+        "in_scope": true,
+        "sla": true,
         "action": false,
-        "citations": false
+        "citations": true
       },
-      "notes": [],
-      "proposals": 1
+      "notes": [
+        "repair attempt: LengthFinishReasonError: Could not parse response content as the length limit was reached - CompletionUsage(completion_tokens=65535, prompt_token",
+        "sla corrected: model said None, corpus says 0.25 for Basic/Sev2"
+      ],
+      "proposals": 0
     },
     {
       "case": "CASE-1049",
@@ -215,13 +212,13 @@
       "action": "escalate",
       "expected_action": "escalate",
       "tier": "cheap",
-      "cost_usd": 0.000242,
+      "cost_usd": 0.000261,
       "score": {
         "severity": true,
         "in_scope": true,
         "sla": true,
         "action": true,
-        "citations": true
+        "citations": false
       },
       "notes": [],
       "proposals": 2
@@ -237,7 +234,7 @@
       "action": "respond",
       "expected_action": "respond",
       "tier": "cheap",
-      "cost_usd": 0.000255,
+      "cost_usd": 0.000321,
       "score": {
         "severity": true,
         "in_scope": true,
@@ -245,7 +242,9 @@
         "action": true,
         "citations": true
       },
-      "notes": [],
+      "notes": [
+        "repair attempt: ValidationError: 1 validation error for Classification\n  Invalid JSON: EOF while parsing a value at line 5 column 27 [type=json_invalid, "
+      ],
       "proposals": 0
     }
   ]

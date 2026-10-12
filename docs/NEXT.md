@@ -1,8 +1,10 @@
 # State and next steps
 
 Written 2026-10-11 at a pause; updated 2026-10-12 after a working session that ran the routing
-experiment, closed the security-severity corpus gap, and fixed a real bug in the SLA gate. This
-project is **mid-build and runs**. Read this before touching anything.
+experiment, closed the security-severity corpus gap, fixed a real bug in the SLA gate, and found
+the bug behind the one case every tier was failing: the retriever was hiding the scope rules from
+the model. The routed eval is now a perfect 50/50. This project is **mid-build and runs**. Read
+this before touching anything.
 
 ## Where it stands
 
@@ -21,38 +23,38 @@ epistemics-heavy habit was explicitly set aside.)
 | `agent.py` | LangGraph state machine, seven nodes, at most two model calls per case (classify, draft). |
 | `router.py` | Cheap by default, strong on signal; reasons recorded per case. |
 | `tools.py` | Reads are functions; **writes return a proposal and need a named approver**. |
-| `policy.py` | SLA overrides are **earned**: a cited override applies only when the gathered facts support it. |
+| `policy.py` | SLA overrides are **earned**: a cited override applies only when the gathered facts support it. Retrieval renders the whole corpus, ranked — no section is ever hidden. |
 | `costs.py` | Per-case cap that stops a run; the record must reconcile with the ledger. |
 | `cli.py` | `triage CASE-1041 [--tier strong|--approve-as NAME]`. |
 | `eval.py` | `just eval` — all ten cases scored against held-out truth, with cost. |
-| tests | 19 offline tests, fake model, no key, no spend. |
+| tests | 21 offline tests, fake model, no key, no spend. |
 
 ## The routing experiment: measured (2026-10-12)
 
-All ten cases, real API, one run per configuration:
+All ten cases, real API, one run per configuration. "Pre-fix" rows ran before the retrieval fix
+(below); "post-fix" rows after:
 
 | run | severity | in scope | sla | action | citations | cost |
 |---|---|---|---|---|---|---|
-| forced cheap | 7/10 | 8/10 | 8/10 | 8/10 | 8/10 | **$0.0024** |
-| forced strong | 7/10 | 8/10 | 8/10 | 8/10 | 8/10 | $0.51 |
-| routed (after fixes) | **9/10** | **9/10** | **10/10** | **9/10** | **9/10** | $0.33 |
+| forced cheap (pre-fix) | 7/10 | 8/10 | 8/10 | 8/10 | 8/10 | **$0.0024** |
+| forced strong (pre-fix) | 7/10 | 8/10 | 8/10 | 8/10 | 8/10 | $0.51 |
+| forced cheap (post-fix) | 9/10 | 10/10 | 10/10 | 8/10 | 9/10 | **$0.0028** |
+| routed (post-fix) | **10/10** | **10/10** | **10/10** | **10/10** | **10/10** | $0.30 |
 
 **Read it honestly:**
 
-- Forced cheap and forced strong **tied on every axis at a 214× cost difference**. On this case set
-  the strong model buys nothing aggregate. "We route models" is now a measured result: the value is
-  not "better answers everywhere", it is sending the two signals that need it (security language,
-  open incidents) to strong.
-- The failures differ even when counts tie. Cheap's catastrophic miss was `CASE-1048` (security on a
-  Basic plan: `out_of_scope`, the whole security path missed) — and the router's existing security
-  signal sends exactly that case to strong. Strong's embarrassing miss was promising a 1-hour SLA to
-  a Basic account (`CASE-1042`). Same score, different failure kinds.
-- At n=10, one run, non-deterministic model: **±1-2 axis points between runs is noise**. The routed
-  row is a run, not a claim. The 2026-10-11 routed run scored sla 10/10 *before* the gate fix and
-  8/10 in_scope in another — same code path, different draws.
-- `CASE-1042` (Basic account filing a technical case) fails in **every** configuration, always as
-  "respond, in scope". No tier gets `POL-PLAN-1`/`POL-SCOPE-1` right on it. It is the one remaining
-  systematic miss and it is a prompt problem, not a model-choice problem.
+- **The biggest miss was not a model at all — it was retrieval.** The lexical retriever's top-6 cut
+  hid `POL-PLAN-1` and `POL-SCOPE-1` from every tier on `CASE-1042`, so "respond, in scope" was the
+  only answer any model could give without citing an id it never saw. The corpus is eight sections;
+  it now renders in full, ranked. Post-fix, forced cheap jumps two axes to 9/10/10/8/9 and routed is
+  a perfect 50/50.
+- Forced cheap and forced strong **tied on every axis at a 214× cost difference** (pre-fix, same
+  blindfold on both). The residual, post-fix gap is what routing is actually for: forced cheap
+  still fumbles security handling (`CASE-1045` severity/action, `CASE-1048` action) that the strong
+  model gets right — and the router's security signal sends exactly those cases to strong.
+- At n=10, one run per cell, non-deterministic model: **±1-2 axis points between runs is noise**.
+  The 50/50 is a run, not a guarantee; the pre-fix routed runs scored 9/10 in_scope and 8/10 in
+  scope on the same code with different draws.
 
 ## What the 2026-10-12 session changed
 
@@ -69,7 +71,17 @@ All ten cases, real API, one run per configuration:
    `[POL-SEV-1]`-shaped ids, burning a repair round-trip (a second model call). The fourth interface
    failure of its class — the lesson from 2026-10-11 ("type the interface, not prompt harder")
    applied: `Classification` normalises ids at the boundary.
-4. **The incident-linking bug did not reproduce.** All 50+ case runs since the pause linked
+4. **Retrieval no longer hides sections from the model.** `policy.retrieve` ranked only sections with
+   term overlap and `tools.search_policy` truncated at k=6 — so for `CASE-1042` ("How do I resize an
+   instance?") neither `POL-PLAN-1` nor `POL-SCOPE-1` ever reached the prompt, and no tier could
+   cite a rule it could not see. An account-aware query was tried first and it traded the bug
+   (gained scope sections, lost `POL-INC-1` on the incident cases) — with eight sections total, the
+   boring fix is to render the corpus in full, ranked. Pinned by a test.
+5. **The repair path no longer crashes on exceptions raised bare.** A live `CASE-1048` crashed with
+   `IndexError` because `_repair` indexed `exc.args[0]` and the incoming exception had empty args —
+   the repair died repairing. Now it uses `str(exc)`. Intermittent (model-output-shaped), so pinned
+   by a deterministic test rather than a rerun.
+6. **The incident-linking bug did not reproduce.** All 70+ case runs since the pause linked
    incidents correctly, including declining a region-only match on `CASE-1041`. No corpus change
    made; keep watching for it, do not fix what is not failing.
 
@@ -80,8 +92,11 @@ output and code: the repair prompt was never rendered into the prompt (so a repa
 identical failure); `next_action` was a free string and a model wrote prose into it; an SLA of
 `"1 hour"` crashed the run instead of being parsed; the cost-reconcile assertion was tighter than its
 own rounding; a model citing the incident override without a matching incident had a correct target
-"corrected" into a wrong one (2026-10-12); bracketed citation ids burned repair calls (2026-10-12).
-**The lesson held: type the interface, and make the gates check facts, not citations.**
+"corrected" into a wrong one (2026-10-12); bracketed citation ids burned repair calls (2026-10-12);
+the retriever's top-6 cut hid the scope rules from every tier — the one case no model could pass
+(2026-10-12); and the repair itself crashed on an exception raised bare (2026-10-12).
+**The lesson held: type the interface, make the gates check facts rather than citations — and never
+hide the rulebook from the model and call the miss a model failure.**
 
 ## Decisions taken
 
@@ -97,24 +112,27 @@ Model defaults are verified against the provider catalogue on 2026-10-11 (cheap
 Nothing was assumed: the names and prices were read from the catalogue, and `costs.PRICES` is the
 single place to update them.
 
-Spend: **$1.02 to 2026-10-11, $1.18 for the 2026-10-12 session** (five ten-case evals plus smoke
-runs) — **$2.20 total**. The expensive part remains output tokens from drafts, and the routed run
-at $0.33/ten cases is the operating cost of the current configuration.
+Spend: **$1.02 to 2026-10-11, $1.77 for the 2026-10-12 sessions** (nine ten-case evals, one smoke
+run, one duplicated-and-cancelled eval that still paid for its tokens) — **$2.79 total**. The
+expensive part remains output tokens from drafts, and the routed run at $0.30/ten cases is the
+operating cost of the current configuration.
 
 ## How to pick it up
 
 ```bash
 cd ~/code/support-triage
 just sync && just seed        # if supportorg.db is missing (it is gitignored)
-just test                     # 19 offline tests, no key needed
+just test                     # 21 offline tests, no key needed
 just triage CASE-1047         # a declared-Severity-1 case on a non-production workload
-just eval                     # the ten-case table, live, real spend (~$0.33)
-just eval --tier cheap        # the same table for $0.0024 — useful for prompt work
+just eval                     # the ten-case table, live, real spend (~$0.30)
+just eval --tier cheap        # the same table for $0.0028 — useful for prompt work
 ```
 
-**Next, in order:** fix `CASE-1042` (prompt work: the Basic-plan entitlement rule is stated in two
-sections and neither is winning) — cheapest way to iterate is `just eval --tier cheap`. Then the
-web UI (M3) — the screenshot/video artifact that makes the rest legible in three minutes,
-deliberately thin. Then OTEL traces (M4), then the CDK stack and one real deploy-and-destroy (M6).
+**Next, in order:** the web UI (M3) — the screenshot/video artifact that makes the rest legible in
+three minutes, deliberately thin. Then OTEL traces (M4), then the CDK stack and one real
+deploy-and-destroy (M6). With the routed eval at 50/50, the interesting open question is no longer
+accuracy on this case set but stability under variance: rerun `just eval` a few times and see what
+a *distribution* over the ten cases looks like, before widening the case set (which is the honest
+next measurement anyway).
 
 **Local git only — the repo is not published.** Publishing is M7 and has not been decided.

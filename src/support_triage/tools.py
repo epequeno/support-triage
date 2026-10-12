@@ -54,8 +54,13 @@ def get_case_context(conn, case_id: str) -> dict:
     }
 
 
-def search_policy(query: str, k: int = 6) -> list[dict]:
-    """The one tool the model is allowed to call for itself (M0)."""
+def search_policy(query: str, k: int | None = None) -> list[dict]:
+    """The one tool the model is allowed to call for itself (M0).
+
+    The corpus is small enough to render in full, and truncating it is how a load-bearing rule
+    (scope, entitlement) ends up invisible to the model: CASE-1042 failed in every tier because
+    POL-PLAN-1 and POL-SCOPE-1 never made the top 6. Ranking still applies — most relevant
+    first — so the ordering stays informative without ever hiding a section."""
     return [{"policy_id": line.policy_id, "section": line.section, "text": line.text}
             for line in policy.retrieve(query, k=k)]
 
