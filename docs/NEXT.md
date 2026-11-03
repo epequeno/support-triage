@@ -150,7 +150,7 @@ the routed run at ~$0.30/ten cases is the operating cost of the current configur
 ```bash
 cd ~/code/support-triage
 just sync && just seed        # if supportorg.db is missing (it is gitignored)
-just test                     # 39 offline tests, no key needed
+just test                     # 40 offline tests, no key needed
 just eval-gate                # judge results/eval.json against results/baseline.json (no spend)
 just triage CASE-1047         # a declared-Severity-1 case on a non-production workload
 just eval                     # the ten-case table, live, real spend (~$0.30)
@@ -190,7 +190,7 @@ and gap #2 (CI + an eval gate) is closed by the same day's second commit. See
 the repo at that time.
 
 **CI and the eval gate, measured (2026-11-03).** `.github/workflows/test.yml` runs the offline
-suite on every push and pull request — `uv sync --frozen`, `uv run pytest -q`, 39 tests, no key and
+suite on every push and pull request — `uv sync --frozen`, `uv run pytest -q`, 40 tests, no key and
 no network — plus an `eval` job on manual dispatch that seeds the org, spends one real routed run
 and gates it. `python -m support_triage.eval_gate` judges a run against `results/baseline.json`:
 severity's floor is 1.0 (perfect in all forty recorded case-draws), the other four axes 0.9, each
@@ -201,6 +201,17 @@ axes — so the gate tolerates the known wobble and fails on a second wobble, wh
 discrimination an n=10 non-deterministic eval can honestly offer. A regression prints the axis,
 the case and the floor; the exit status is the check. The eval job runs in the `eval` environment
 and refuses to start without `OPENROUTER_API_KEY`.
+
+**Load and operability, measured (2026-11-03).** `just load` drives the API in-process or against a
+live `just web`: single uvicorn worker, one SQLite connection per request, 32-core dev box, 200–300
+requests per path. At concurrency 10, `/` runs p50 3.8 ms / p99 50.6 ms and `/api/cases` p50
+16.2 ms / p99 54.5 ms at 480 req/s; at concurrency 16 `/api/cases` is p50 57.4 ms / p99 95.2 ms at
+291 req/s, against 0.8 ms / 931 req/s at concurrency 1. The handler body is 0.1 ms — the collapse is
+the per-request connect, and a thread-local pool is the fix if this ever serves more than a demo.
+`docs/RUNBOOK.md` is the one-page operational answer: what is running, where to look, the spend cap
+($0.25 per case), an approval store that must fail the request rather than report a write it did not
+make (now test-pinned at 500), and a health check that turns missing `APP_TOKEN` into a task that is
+replaced every few minutes — a wiring failure that looks like an outage.
 
 **The per-policy cache, measured (2026-11-03).** One triage asked the corpus for the same sections
 six times — the classify prompt looked each candidate up twice, then the citation check, the SLA

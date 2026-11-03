@@ -7,7 +7,7 @@ greenfield — M0–M7 are built, the demo runs, and the working tree is clean.
 
 ## Current state
 
-Three readiness-review gaps closed and committed on 2026-11-03:
+Five readiness-review gaps closed and committed on 2026-11-03:
 
 1. **Caller auth and a durable audit trail** (`ab2dd7d`). Every `/api` route requires a bearer
    token; approvals are written through an `ApprovalStore` — SQLite locally, S3 when
@@ -45,7 +45,9 @@ before today; it does now and it is green.
 | `.github/workflows/test.yml` | `offline` job on push/PR; `eval` job on manual dispatch only, in the `eval` environment, refusing to start without `OPENROUTER_API_KEY`, uploading `results/eval.json`. |
 | `src/support_triage/policy.py` | Per-policy-id caches: parse keyed by file identity (mtime, size), terms and rendered blocks keyed by the section's own text, `index()` derived once and returned read-only. `retrieve` keeps the mandatory sections at any `k`. |
 | `src/support_triage/agent.py` | `_prompt` resolves the corpus index once instead of twice per candidate. Prompt bytes unchanged. |
-| tests | `tests/test_web.py` (page open, API 401, fail-closed 503, approve through the store), `tests/test_eval_gate.py` (recorded run passes, one noise miss passes, two misses fail and are named, severity miss fails, cost blowup fails, partial and inconsistent runs refused, CLI exit codes), and three cache tests (mandatory sections survive any query and any `k`; the cache renders byte-for-byte what a fresh parse renders; a corpus edit is never served stale). **39 tests pass.** |
+| `src/support_triage/load.py` · `results/load.json` | p50/p95/p99 and throughput per path, in-process or against a live URL. Recorded run: 300 requests/path at concurrency 10. |
+| `docs/RUNBOOK.md` | One page: first five minutes, the three incidents, escalation, and the gaps it does not paper over. |
+| tests | `tests/test_web.py` (page open, API 401, fail-closed 503, approve through the store), `tests/test_eval_gate.py` (recorded run passes, one noise miss passes, two misses fail and are named, severity miss fails, cost blowup fails, partial and inconsistent runs refused, CLI exit codes), a failed audit write case, and three cache tests (mandatory sections survive any query and any `k`; the cache renders byte-for-byte what a fresh parse renders; a corpus edit is never served stale). **40 tests pass.** |
 | docs | README run instructions, auth/approval file table, deploy caveat, CI/eval-gate section; `docs/NEXT.md` records the gate and its thresholds. |
 
 ## Verified
@@ -64,6 +66,9 @@ before today; it does now and it is green.
 | Cache equivalence | `_prompt` for all ten cases, pre-change commit (worktree) vs now | **10/10 byte-identical**; prompt assembly 390 µs → 12 µs per case |
 | Cache invalidation | rewrite a temp corpus, then `load`/`index`/`retrieve` again | new text visible immediately |
 | Cache guarantee | `retrieve(q, k=1)` over four queries, incl. an empty one | `POL-PLAN-1` and `POL-SCOPE-1` always in the set |
+| Load, in-process | `just load` (300/path, concurrency 10) | `/` p50 5.1 ms / p99 17.1 ms · `/api/cases` p50 32.0 ms / p99 64.7 ms |
+| Load, live uvicorn | `just load --url http://127.0.0.1:8012` | `/` p50 3.8 ms / p99 50.6 ms · `/api/cases` p50 16.2 ms / p99 54.5 ms, 480 req/s; `/api/cases` p50 57 ms, 291 req/s at concurrency 16 |
+| Failed audit write | store that raises on `record`, through `TestClient` | HTTP 500 — a failed approval is never reported as an approval (now test-pinned) |
 | CDK synthesis | `OPENROUTER_API_KEY=dummy CDK_DEFAULT_ACCOUNT=… CDK_DEFAULT_REGION=us-east-1 uv run cdk synth --quiet` | stack synthesizes; one `minHealthyPercent` annotation remains |
 
 ## Not verified / known limits
@@ -80,6 +85,11 @@ before today; it does now and it is green.
   security signal fires: that saves 638 chars on eight of ten cases — 18.5% of policy text, 14.3%
   of the prompts — and it hides the section that sets a security report's severity from every case
   the lexical signal misses. The cache therefore changes compute, not tokens.
+- **The load numbers are one box.** One uvicorn worker, one SQLite connection per request, a
+  32-core dev machine, no network between client and app in the in-process mode. `/api/cases`
+  degrades 70× from concurrency 1 to 16 — the per-request `backend.connect()`, not the query (the
+  handler body is 0.1 ms). A thread-local connection pool is the fix if this ever serves more than a
+  demo; it was deliberately not built.
 - **The gate is a judgment at n=10.** Its floors tolerate exactly one miss on the four 0.9 axes and
   none on severity, because that is what the forty recorded case-draws support. It is not a
   statistical test; it is a tripwire that also prices the run.
@@ -104,19 +114,7 @@ before today; it does now and it is green.
 
 ## Next steps, ranked
 
-### 1. Measure concurrency and a p99 (review gap #4, ~half day)
-
-- Add a small load script against `just web` or the ASGI app; record p50/p99 for concurrent requests.
-- **Done when:** README or `results/` states a throughput and p99, even a small one. Optimizing is
-  optional; replacing "unknown" with a number is the point.
-
-### 2. Write the one-page runbook (review gap #5, ~2 h)
-
-- `docs/RUNBOOK.md`: who is paged, what they look at, and the three likely incidents (spend cap hit,
-  approval store unavailable, task unhealthy/port closed).
-- **Done when:** the page exists and is linked from the README; no code change required.
-
-### 3. Optional: verify the deployed shape against real AWS
+### 1. Optional: verify the deployed shape against real AWS
 
 - Requires explicit approval; it creates billable resources. Use the deploy auth in `docs/NEXT.md`
   (`AWS_PROFILE=arch`, SSO session `main`, account `496830984285`, `AdministratorAccess`).
@@ -130,7 +128,7 @@ before today; it does now and it is green.
   and secret are destroyed with the stack; the audit trail is not preserved after teardown unless the
   removal policy is changed.
 
-### 4. Re-score the readiness review
+### 2. Re-score the readiness review
 
 - Re-run the five-vector/four-question rubric against this state. Dimensions 11 (security and
   permissions) and the evaluation dimension should move; the remaining gaps are cache, capacity,
@@ -145,7 +143,8 @@ before today; it does now and it is green.
 ```bash
 cd ~/code/support-triage
 just sync && just seed          # seed the mock org if supportorg.db is missing
-just test                       # 39 offline tests, no key
+just test                       # 40 offline tests, no key
+just load --url http://127.0.0.1:8000   # p50/p99 for the API against a live `just web`
 just triage CASE-1041           # one case end to end
 just triage CASE-1041 --approve-as "Your Name"
 APP_TOKEN=dev just web          # enter "dev" in the token bar
@@ -166,7 +165,7 @@ gh workflow run test.yml        # the CI eval job; needs the repo secret, spends
 
 ## First 30 minutes
 
-1. `just test`; confirm 39 pass.
+1. `just test`; confirm 40 pass.
 2. `just eval-gate`; confirm the recorded run clears the baseline.
 3. Read `docs/NEXT.md` for the measured results and the bugs already found.
-4. Pick step 1 (p99) or step 2 (runbook); both are small and unblock the re-score.
+4. The only ranked work left is the AWS verification (needs approval) and the readiness re-score.

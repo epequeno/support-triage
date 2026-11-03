@@ -25,5 +25,8 @@ test:
 web:
     @uv run uvicorn support_triage.web:app --port 8000
 
+load *ARGS:
+    @uv run python -m support_triage.load {{ARGS}}
+
 check: test
     @uv run python -m support_triage.costs

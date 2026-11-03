@@ -22,6 +22,7 @@ just triage CASE-1047 --approve-as your-name   # the human half of the approval 
 APP_TOKEN=dev just web          # the thin web UI; enter "dev" in the token bar
 just test                       # offline and deterministic; no API key needed
 just eval-gate                  # judge results/eval.json against results/baseline.json; no spend
+just load --url http://127.0.0.1:8000   # p50/p99 for the API against a live `just web`
 uv run python -m support_triage.costs          # what the last runs cost, by tier
 ```
 
@@ -53,6 +54,8 @@ case text ─▶ gather ─▶ route ─▶ retrieve ─▶ classify ─▶ draf
 | `src/support_triage/web.py` | The thin web UI (M3): one page, no framework. Every `/api` route requires the shared bearer token from `APP_TOKEN`; the page prompts for it. Triage a case, see the record, approve a proposal by name — the approve endpoint executes a proposal out of the server's own record, so a browser can never invent a state change. |
 | `src/support_triage/auth.py` | The caller gate: a constant-time bearer-token check, fail-closed when `APP_TOKEN` is unset. |
 | `src/support_triage/approvals.py` | The audit trail: SQLite locally, one immutable JSON object per approval in S3 when `APPROVALS_BUCKET` is set. |
+| `src/support_triage/eval_gate.py` | Judges an eval run against the recorded floors in `results/baseline.json`: per-axis rates plus a cost ceiling. Exit status is the check. |
+| `src/support_triage/load.py` | p50/p95/p99 and throughput for the web API, in-process or against a live URL (`just load`). |
 | `src/support_triage/traces.py` | OTEL traces (M4): every triage flushes a span tree to `results/traces/<case>-<stamp>.json` — nodes, both model calls (with tier and tokens), repairs, and durations. Real opentelemetry-api/sdk, no collector. |
 
 ## The cases worth looking at
@@ -71,14 +74,15 @@ case text ─▶ gather ─▶ route ─▶ retrieve ─▶ classify ─▶ draf
 [`HANDOFF.md`](HANDOFF.md) is the current handoff — what changed on 2026-11-03, what is
 verified, and the ranked next steps. [`docs/NEXT.md`](docs/NEXT.md) is the
 build history: what is built, the measured numbers with their caveats, what the routing experiment
-showed, and how to pick the work back up.
+showed, and how to pick the work back up. [`docs/RUNBOOK.md`](docs/RUNBOOK.md) is the one-page
+runbook: what is running, where to look, and the three incidents this deploy can actually have.
 
 ## Status
 
 **M0 done, the eval (M5) runs, routing is measured, the web UI (M3), OTEL traces (M4) and the
 AWS deploy (M6) are built.** Built: the mock support org, the citable policy corpus, the
 LangGraph graph, model routing, the approval gate, cost accounting with a per-case cap, the
-CLI, the thin web UI (`just web`), span-tree traces on every run, 39 offline tests in CI, and
+CLI, the thin web UI (`just web`), span-tree traces on every run, 40 offline tests in CI, and
 `just eval` over all ten cases with held-out truth, gated against a recorded baseline.
 
 The routing experiment (real API, all ten cases, 2026-10-12). "Pre-fix" rows ran before the
@@ -112,7 +116,7 @@ the repair itself, mid-eval).
 ## CI and the eval gate
 
 `.github/workflows/test.yml` runs the offline suite on every push and pull request — `uv sync
---frozen`, then `uv run pytest -q`, 39 tests, no API key and no network — and a separate
+--frozen`, then `uv run pytest -q`, 40 tests, no API key and no network — and a separate
 `eval gate (real spend)` job that only runs on manual dispatch: it seeds the org, spends one real
 routed eval run (~$0.30), and judges the result.
 
@@ -128,6 +132,27 @@ floor was; the exit status is the check.
 The eval job needs the repository secret `OPENROUTER_API_KEY` and checks for it before spending.
 It runs in the `eval` environment — add required reviewers or a spending limit there if the repo
 is shared.
+
+## Under load, measured (2026-11-03)
+
+`just load` drives the ASGI app in-process, or a live `just web` with `--url`, and records
+p50/p95/p99 and throughput per path into `results/load.json`. Single uvicorn worker, one SQLite
+connection per request, 200–300 requests per path, 32-core dev box:
+
+| path | concurrency | p50 | p99 | req/s |
+|---|---|---|---|---|
+| `/` | 1 | 0.6 ms | 1.3 ms | 1474 |
+| `/` | 10 | 3.8 ms | 50.6 ms | 1892 |
+| `/api/cases` | 1 | 0.8 ms | 4.3 ms | 931 |
+| `/api/cases` | 4 | 3.9 ms | 17.0 ms | 704 |
+| `/api/cases` | 16 | 57.4 ms | 95.2 ms | 291 |
+
+The honest reading: the static page and the ledger and approval-trail endpoints stay flat to about
+ten concurrent requests; `/api/cases` degrades badly with depth because every request opens its own
+SQLite connection — the handler body itself is 0.1 ms. That is the per-request connect pattern, not
+a query problem. `/api/triage` is excluded on purpose: its latency is the model's and measuring it
+would cost money per request. Fixing the connect pattern means a thread-local connection pool; it
+is not needed for a demo one person drives, and it is now a number instead of "unknown".
 
 ## The deploy (M6), for the record
 
