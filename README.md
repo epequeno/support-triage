@@ -78,7 +78,7 @@ showed, and how to pick the work back up.
 **M0 done, the eval (M5) runs, routing is measured, the web UI (M3), OTEL traces (M4) and the
 AWS deploy (M6) are built.** Built: the mock support org, the citable policy corpus, the
 LangGraph graph, model routing, the approval gate, cost accounting with a per-case cap, the
-CLI, the thin web UI (`just web`), span-tree traces on every run, 36 offline tests in CI, and
+CLI, the thin web UI (`just web`), span-tree traces on every run, 39 offline tests in CI, and
 `just eval` over all ten cases with held-out truth, gated against a recorded baseline.
 
 The routing experiment (real API, all ten cases, 2026-10-12). "Pre-fix" rows ran before the
@@ -112,7 +112,7 @@ the repair itself, mid-eval).
 ## CI and the eval gate
 
 `.github/workflows/test.yml` runs the offline suite on every push and pull request — `uv sync
---frozen`, then `uv run pytest -q`, 36 tests, no API key and no network — and a separate
+--frozen`, then `uv run pytest -q`, 39 tests, no API key and no network — and a separate
 `eval gate (real spend)` job that only runs on manual dispatch: it seeds the org, spends one real
 routed eval run (~$0.30), and judges the result.
 

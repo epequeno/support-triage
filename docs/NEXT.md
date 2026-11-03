@@ -150,7 +150,7 @@ the routed run at ~$0.30/ten cases is the operating cost of the current configur
 ```bash
 cd ~/code/support-triage
 just sync && just seed        # if supportorg.db is missing (it is gitignored)
-just test                     # 36 offline tests, no key needed
+just test                     # 39 offline tests, no key needed
 just eval-gate                # judge results/eval.json against results/baseline.json (no spend)
 just triage CASE-1047         # a declared-Severity-1 case on a non-production workload
 just eval                     # the ten-case table, live, real spend (~$0.30)
@@ -190,7 +190,7 @@ and gap #2 (CI + an eval gate) is closed by the same day's second commit. See
 the repo at that time.
 
 **CI and the eval gate, measured (2026-11-03).** `.github/workflows/test.yml` runs the offline
-suite on every push and pull request — `uv sync --frozen`, `uv run pytest -q`, 36 tests, no key and
+suite on every push and pull request — `uv sync --frozen`, `uv run pytest -q`, 39 tests, no key and
 no network — plus an `eval` job on manual dispatch that seeds the org, spends one real routed run
 and gates it. `python -m support_triage.eval_gate` judges a run against `results/baseline.json`:
 severity's floor is 1.0 (perfect in all forty recorded case-draws), the other four axes 0.9, each
@@ -201,3 +201,16 @@ axes — so the gate tolerates the known wobble and fails on a second wobble, wh
 discrimination an n=10 non-deterministic eval can honestly offer. A regression prints the axis,
 the case and the floor; the exit status is the check. The eval job runs in the `eval` environment
 and refuses to start without `OPENROUTER_API_KEY`.
+
+**The per-policy cache, measured (2026-11-03).** One triage asked the corpus for the same sections
+six times — the classify prompt looked each candidate up twice, then the citation check, the SLA
+table and a repair attempt each re-read the file. The corpus is now parsed once per process per file
+version and indexed once; each section's search terms and rendered block are computed once and
+keyed by that section's own text, so an edit is never served stale. Prompt assembly per case went
+from 390 µs to 12 µs, and all ten classify prompts are byte-identical to the previous commit, which
+is why no eval spend was needed to check the axes. `retrieve(k=…)` can no longer cut below
+`POL-PLAN-1`/`POL-SCOPE-1` at any k. **The token half of the review item was refused, on
+measurement:** policy text is 76% of the classify prompt (3,013 of 3,917 chars), and the only real
+cut — sending `POL-SEC-1` only when the router's lexical signal fires — saves 18.5% of policy text
+(14.3% of the prompts) on eight of ten cases while hiding the section that sets a security report's
+severity from every case that signal misses. That is the trade the repo exists to refuse.

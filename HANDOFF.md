@@ -7,16 +7,21 @@ greenfield — M0–M7 are built, the demo runs, and the working tree is clean.
 
 ## Current state
 
-Two readiness-review gaps closed and committed on 2026-11-03:
+Three readiness-review gaps closed and committed on 2026-11-03:
 
 1. **Caller auth and a durable audit trail** (`ab2dd7d`). Every `/api` route requires a bearer
    token; approvals are written through an `ApprovalStore` — SQLite locally, S3 when
    `APPROVALS_BUCKET` is set. The CDK stack creates the bucket and a generated Secrets Manager app
    token, the health check sends the token, and deployments fail fast with a circuit breaker.
 2. **CI and an eval gate** (`3ad9418`, plus the action-pin fix). `.github/workflows/test.yml` runs
-   the 36-test offline suite on every push and pull request. A manual-dispatch `eval` job runs one
+   the 39-test offline suite on every push and pull request. A manual-dispatch `eval` job runs one
    real routed eval (~$0.30) and gates it with `python -m support_triage.eval_gate` against
    `results/baseline.json`.
+3. **The per-policy cache** (`89e8f84`). The corpus is parsed once per process per file version,
+   indexed once, and each section's terms and rendered block are computed once and reused, so the
+   classify prompt is assembled rather than rebuilt six times per case. `retrieve(k=…)` can no
+   longer cut below `POL-PLAN-1`/`POL-SCOPE-1`. **The token half of gap #3 was measured and
+   refused** — see "Not verified / known limits".
 
 `src/support_triage/traces.py` carries the **pre-existing 2026-10 edit**: optional OTLP export to
 the shared collector when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, on top of the file-tree export. It
@@ -38,14 +43,16 @@ before today; it does now and it is green.
 | `src/support_triage/eval_gate.py` | Judges a run against the baseline: per-axis floors as rates snapped up to whole cases, plus a cost ceiling. Exit 0 pass, 1 regression, 2 unusable input; names the axis and the case. |
 | `results/baseline.json` | The floors — severity 1.0, in scope/sla/action/citations 0.9, cost ceiling $0.36 — with the four reference runs they came from. |
 | `.github/workflows/test.yml` | `offline` job on push/PR; `eval` job on manual dispatch only, in the `eval` environment, refusing to start without `OPENROUTER_API_KEY`, uploading `results/eval.json`. |
-| tests | `tests/test_web.py` (page open, API 401, fail-closed 503, approve through the store) and `tests/test_eval_gate.py` (recorded run passes, one noise miss passes, two misses fail and are named, severity miss fails, cost blowup fails, partial and inconsistent runs refused, CLI exit codes). **36 tests pass.** |
+| `src/support_triage/policy.py` | Per-policy-id caches: parse keyed by file identity (mtime, size), terms and rendered blocks keyed by the section's own text, `index()` derived once and returned read-only. `retrieve` keeps the mandatory sections at any `k`. |
+| `src/support_triage/agent.py` | `_prompt` resolves the corpus index once instead of twice per candidate. Prompt bytes unchanged. |
+| tests | `tests/test_web.py` (page open, API 401, fail-closed 503, approve through the store), `tests/test_eval_gate.py` (recorded run passes, one noise miss passes, two misses fail and are named, severity miss fails, cost blowup fails, partial and inconsistent runs refused, CLI exit codes), and three cache tests (mandatory sections survive any query and any `k`; the cache renders byte-for-byte what a fresh parse renders; a corpus edit is never served stale). **39 tests pass.** |
 | docs | README run instructions, auth/approval file table, deploy caveat, CI/eval-gate section; `docs/NEXT.md` records the gate and its thresholds. |
 
 ## Verified
 
 | check | command | result |
 |---|---|---|
-| Offline suite | `uv sync --frozen && uv run pytest -q` | 36 passed in ~0.3 s |
+| Offline suite | `uv sync --frozen && uv run pytest -q` | 39 passed in ~0.3 s |
 | CI on push | `git push origin main` → run 41656259069 | **green**; `offline suite` success, `eval gate` correctly skipped |
 | Eval job wiring | `gh workflow run test.yml` → run 41656367230 | actions resolve, then `OPENROUTER_API_KEY is not set; the eval spends real credit and will not run blind` — **fails before any spend** |
 | Gate, recorded runs | `just eval-gate` over `eval.json` and `eval-dist-1..3` | all four PASS, including the run that missed `CASE-1046` on four axes |
@@ -54,6 +61,9 @@ before today; it does now and it is green.
 | SQLite durability | two separate Python processes opening the same DB | one approval row survived; `approved_by` intact |
 | HTTP auth gate | `APP_TOKEN=smoke uv run uvicorn support_triage.web:app --port 8011` then `curl` | page 200 without token; `/api/cases` 401 without token; 200 with token; page contains the token bar |
 | S3 adapter | `uv run --with 'moto[s3]' python …` | `record` + `list` round-trip for `CASE-1041`; unknown case returns `[]` |
+| Cache equivalence | `_prompt` for all ten cases, pre-change commit (worktree) vs now | **10/10 byte-identical**; prompt assembly 390 µs → 12 µs per case |
+| Cache invalidation | rewrite a temp corpus, then `load`/`index`/`retrieve` again | new text visible immediately |
+| Cache guarantee | `retrieve(q, k=1)` over four queries, incl. an empty one | `POL-PLAN-1` and `POL-SCOPE-1` always in the set |
 | CDK synthesis | `OPENROUTER_API_KEY=dummy CDK_DEFAULT_ACCOUNT=… CDK_DEFAULT_REGION=us-east-1 uv run cdk synth --quiet` | stack synthesizes; one `minHealthyPercent` annotation remains |
 
 ## Not verified / known limits
@@ -65,6 +75,11 @@ before today; it does now and it is green.
   environment yet, so only the fail-fast path is proven. Set `OPENROUTER_API_KEY` as a **repository
   secret**, and add required reviewers or a spending limit to the `eval` environment before
   dispatching for real.
+- **Gap #3's token half is refused, on measurement.** Policy text is 76% of the classify prompt
+  (3,013 of ~3,917 chars). The only real cut is sending `POL-SEC-1` only when the router's lexical
+  security signal fires: that saves 638 chars on eight of ten cases — 18.5% of policy text, 14.3%
+  of the prompts — and it hides the section that sets a security report's severity from every case
+  the lexical signal misses. The cache therefore changes compute, not tokens.
 - **The gate is a judgment at n=10.** Its floors tolerate exactly one miss on the four 0.9 axes and
   none on severity, because that is what the forty recorded case-draws support. It is not a
   statistical test; it is a tripwire that also prices the run.
@@ -89,27 +104,19 @@ before today; it does now and it is green.
 
 ## Next steps, ranked
 
-### 1. Add the per-policy cache (review gap #3, ~half day)
-
-- Current `policy.retrieve` renders all eight sections on every call. Add a per-policy-id cache while
-  guaranteeing the scope and entitlement sections are always present; keep the `CASE-1042` fix.
-- **Done when:** the offline suite and a routed eval keep the same axes, and token/cost per case drops
-  without hiding a rule. Add a test that the cache cannot omit `POL-PLAN-1`/`POL-SCOPE-1`.
-- The eval gate now makes the second half of that cheap to check: `just eval` then `just eval-gate`.
-
-### 2. Measure concurrency and a p99 (review gap #4, ~half day)
+### 1. Measure concurrency and a p99 (review gap #4, ~half day)
 
 - Add a small load script against `just web` or the ASGI app; record p50/p99 for concurrent requests.
 - **Done when:** README or `results/` states a throughput and p99, even a small one. Optimizing is
   optional; replacing "unknown" with a number is the point.
 
-### 3. Write the one-page runbook (review gap #5, ~2 h)
+### 2. Write the one-page runbook (review gap #5, ~2 h)
 
 - `docs/RUNBOOK.md`: who is paged, what they look at, and the three likely incidents (spend cap hit,
   approval store unavailable, task unhealthy/port closed).
 - **Done when:** the page exists and is linked from the README; no code change required.
 
-### 4. Optional: verify the deployed shape against real AWS
+### 3. Optional: verify the deployed shape against real AWS
 
 - Requires explicit approval; it creates billable resources. Use the deploy auth in `docs/NEXT.md`
   (`AWS_PROFILE=arch`, SSO session `main`, account `496830984285`, `AdministratorAccess`).
@@ -123,19 +130,22 @@ before today; it does now and it is green.
   and secret are destroyed with the stack; the audit trail is not preserved after teardown unless the
   removal policy is changed.
 
-### 5. Re-score the readiness review
+### 4. Re-score the readiness review
 
 - Re-run the five-vector/four-question rubric against this state. Dimensions 11 (security and
   permissions) and the evaluation dimension should move; the remaining gaps are cache, capacity,
   operability, and the unproven eval job.
 - **Done when:** the review note and registry entry carry a current dimension count and a next gap.
+- Note for the re-score: gap #3 is closed as a *compute* fix, with the token saving refused rather
+  than shipped. If a reviewer wants the 14%, the honest route is a facts-conditioned candidate set
+  plus a routed eval showing no axis loss — not a lexical shortcut.
 
 ## Commands and access
 
 ```bash
 cd ~/code/support-triage
 just sync && just seed          # seed the mock org if supportorg.db is missing
-just test                       # 36 offline tests, no key
+just test                       # 39 offline tests, no key
 just triage CASE-1041           # one case end to end
 just triage CASE-1041 --approve-as "Your Name"
 APP_TOKEN=dev just web          # enter "dev" in the token bar
@@ -156,7 +166,7 @@ gh workflow run test.yml        # the CI eval job; needs the repo secret, spends
 
 ## First 30 minutes
 
-1. `just test`; confirm 36 pass.
+1. `just test`; confirm 39 pass.
 2. `just eval-gate`; confirm the recorded run clears the baseline.
 3. Read `docs/NEXT.md` for the measured results and the bugs already found.
-4. Pick step 1 (the policy cache) unless the owner asks for the AWS verification first.
+4. Pick step 1 (p99) or step 2 (runbook); both are small and unblock the re-score.
