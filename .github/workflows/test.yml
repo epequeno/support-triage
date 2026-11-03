@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
       - run: uv sync --frozen
@@ -38,7 +38,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
       - run: uv sync --frozen
@@ -58,7 +58,7 @@ jobs:
         run: uv run python -m support_triage.eval
       - name: gate the run against the recorded baseline
         run: uv run python -m support_triage.eval_gate results/eval.json
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: eval-run
