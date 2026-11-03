@@ -7,7 +7,7 @@ greenfield — M0–M7 are built, the demo runs, and the working tree is clean.
 
 ## Current state
 
-Six readiness-review gaps closed, and the deployed shape verified against real AWS, on 2026-11-03:
+Six readiness-review gaps closed, the deployed shape verified against real AWS, and the review re-scored, on 2026-11-03:
 
 1. **Caller auth and a durable audit trail** (`ab2dd7d`). Every `/api` route requires a bearer
    token; approvals are written through an `ApprovalStore` — SQLite locally, S3 when
@@ -32,6 +32,10 @@ Six readiness-review gaps closed, and the deployed shape verified against real A
    nothing behind — after one fix: the container's log group was retained by every `cdk destroy`,
    leaking a group per deploy (two from October were still there). The stack now sets
    `RemovalPolicy.DESTROY` on it and a second cycle left zero.
+7. **The readiness review re-scored** (`notes/2026-11-03-production-readiness-support-triage.md` §8,
+   outside the repo). **11 of 12 dimensions at L2**, one short: dimension 1, identity and provenance,
+   stays L1 because a run records neither the model version nor a corpus digest. The bar needs L2 on
+   dimension 1, so the verdict is still "not production ready" — by one dimension, not six.
 
 `src/support_triage/traces.py` carries the **pre-existing 2026-10 edit**: optional OTLP export to
 the shared collector when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, on top of the file-tree export. It
@@ -131,17 +135,26 @@ before today; it does now and it is green.
 
 ## Next steps, ranked
 
-### 1. Re-score the readiness review
+### 1. Record provenance in the run manifest (the only dimension below L2, ~2 h)
 
-- **Blocked:** the review note with the 12-dimension rubric is not in this repo and could not be
-  found under `~/code`; re-scoring needs it pasted or pointed at.
-- Re-run the five-vector/four-question rubric against this state. Dimensions 11 (security and
-  permissions) and the evaluation dimension should move; the remaining gaps are alarms and the
-  unproven eval job.
-- **Done when:** the review note and registry entry carry a current dimension count and a next gap.
-- Note for the re-score: gap #3 is closed as a *compute* fix, with the token saving refused rather
-  than shipped. If a reviewer wants the 14%, the honest route is a facts-conditioned candidate set
-  plus a routed eval showing no axis loss — not a lexical shortcut.
+- `results/eval.json` rows carry `tier` but not the model; no run records the corpus digest or a
+  prompt hash; traces carry the model per call but are gitignored and not tied to a commit.
+- Put the model id, a digest of `corpus/policy.md`, and a hash of the prompt template in the trace
+  root span and in each eval row (or a run manifest beside it). Then a run is reproducible from the
+  repo alone.
+- **Done when:** `results/eval.json` names the model and the corpus version, and dimension 1 can be
+  scored L2 against its own evidence — after which the project passes the rubric's bar.
+
+### 2. Alarms, required checks, and the token economics
+
+- **Alarms (~half day, dimension 9's L3):** task health, 5xx rate, approval-store errors, spend —
+  plus the decision on who is paged, which today is "nobody".
+- **Required checks (~1–2 h, dimension 10's L3):** `main` is unprotected and history is direct
+  commits, so the green suite does not block anything. Protect the branch, require the check, and
+  schedule the eval run for drift.
+- **Token economics (a day, ~$0.30 of eval, dimension 4's L3):** a facts-conditioned candidate set
+  with a routed eval proving no axis loss. The 14% saving is refused today on measurement, not
+  unimplemented by accident.
 
 ## Commands and access
 
@@ -174,4 +187,4 @@ gh workflow run test.yml        # the CI eval job; needs the repo secret, spends
 1. `just test`; confirm 40 pass.
 2. `just eval-gate`; confirm the recorded run clears the baseline.
 3. Read `docs/NEXT.md` for the measured results and the bugs already found.
-4. The only ranked work left is the readiness re-score, which needs the review note.
+4. Pick step 1 (provenance) — it is the last dimension between this and the rubric's bar.

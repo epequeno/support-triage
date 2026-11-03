@@ -202,6 +202,15 @@ discrimination an n=10 non-deterministic eval can honestly offer. A regression p
 the case and the floor; the exit status is the check. The eval job runs in the `eval` environment
 and refuses to start without `OPENROUTER_API_KEY`.
 
+**The review, re-scored (2026-11-03).** The five-vector change matrix and the twelve dimensions
+were re-scored after the work above: **11 of 12 at L2**, with the only L1 left being identity and
+provenance — `results/eval.json` records the tier but not the model, and no run records the corpus
+digest, so a run is not reproducible from the repo. The rubric's bar needs L2 on dimension 1, so the
+verdict is unchanged in words and much changed in size: "not production ready" by one two-hour
+dimension rather than by six. §8 of `notes/2026-11-03-production-readiness-support-triage.md` holds
+the table; the review's own §4 findings are closed except "nothing would page anyone", which is now
+a runbook with no alarm behind it.
+
 **The deployed shape, verified for real (2026-11-03).** Deployed with the auth and S3 changes
 (`cdk deploy`, 167 s): the task reported HEALTHY — which is itself the proof that the token reached
 the container from Secrets Manager, since the health check sends it — the page answered 200 while

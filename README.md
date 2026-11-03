@@ -85,6 +85,12 @@ LangGraph graph, model routing, the approval gate, cost accounting with a per-ca
 CLI, the thin web UI (`just web`), span-tree traces on every run, 40 offline tests in CI, and
 `just eval` over all ten cases with held-out truth, gated against a recorded baseline.
 
+Production readiness, re-scored on 2026-11-03 against a twelve-dimension rubric (five change vectors
+× four questions): **11 of 12 dimensions at L2**. The one shortfall is provenance — a run records
+its tier and cost but not its model version or corpus digest, so it is not reproducible from the
+repo alone. That is a two-hour gap, and the honest headline: not production ready, by one dimension,
+with the rest measured.
+
 The routing experiment (real API, all ten cases, 2026-10-12). "Pre-fix" rows ran before the
 retrieval fix below; "post-fix" rows after:
 
