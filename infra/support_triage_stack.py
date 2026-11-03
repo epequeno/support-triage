@@ -109,6 +109,11 @@ class SupportTriageStack(Stack):
                     self,
                     "logs",
                     retention=logs.RetentionDays.ONE_DAY,
+                    # Found live on 2026-11-03: CloudFormation retains log groups by default, so
+                    # every deploy leaked an empty group that `cdk destroy` did not remove (two
+                    # from the October deploy were still there). The name stays generated so a
+                    # leaked group can never collide with the next deploy.
+                    removal_policy=RemovalPolicy.DESTROY,
                 ),
             ),
             health_check=ecs.HealthCheck(

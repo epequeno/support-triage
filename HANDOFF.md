@@ -7,14 +7,14 @@ greenfield — M0–M7 are built, the demo runs, and the working tree is clean.
 
 ## Current state
 
-Five readiness-review gaps closed and committed on 2026-11-03:
+Six readiness-review gaps closed, and the deployed shape verified against real AWS, on 2026-11-03:
 
 1. **Caller auth and a durable audit trail** (`ab2dd7d`). Every `/api` route requires a bearer
    token; approvals are written through an `ApprovalStore` — SQLite locally, S3 when
    `APPROVALS_BUCKET` is set. The CDK stack creates the bucket and a generated Secrets Manager app
    token, the health check sends the token, and deployments fail fast with a circuit breaker.
 2. **CI and an eval gate** (`3ad9418`, plus the action-pin fix). `.github/workflows/test.yml` runs
-   the 39-test offline suite on every push and pull request. A manual-dispatch `eval` job runs one
+   the 40-test offline suite on every push and pull request. A manual-dispatch `eval` job runs one
    real routed eval (~$0.30) and gates it with `python -m support_triage.eval_gate` against
    `results/baseline.json`.
 3. **The per-policy cache** (`89e8f84`). The corpus is parsed once per process per file version,
@@ -22,6 +22,16 @@ Five readiness-review gaps closed and committed on 2026-11-03:
    classify prompt is assembled rather than rebuilt six times per case. `retrieve(k=…)` can no
    longer cut below `POL-PLAN-1`/`POL-SCOPE-1`. **The token half of gap #3 was measured and
    refused** — see "Not verified / known limits".
+4. **Concurrency and p99** (`load.py`, `results/load.json`). `just load` drives the ASGI app
+   in-process or a live `just web` and records p50/p95/p99 and throughput per path.
+5. **The runbook** (`docs/RUNBOOK.md`). What is running, where to look, and the three incidents this
+   deploy can have: spend cap, approval store unavailable, task unhealthy. Linked from the README.
+6. **The deployed shape verified against real AWS** (deployed, exercised, destroyed). The gate held
+   (200/401/401/200 on page / no token / wrong token / token), CASE-1041 was triaged and approved in
+   the cloud, the approval object landed in S3 and survived a task replacement, and teardown left
+   nothing behind — after one fix: the container's log group was retained by every `cdk destroy`,
+   leaking a group per deploy (two from October were still there). The stack now sets
+   `RemovalPolicy.DESTROY` on it and a second cycle left zero.
 
 `src/support_triage/traces.py` carries the **pre-existing 2026-10 edit**: optional OTLP export to
 the shared collector when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, on top of the file-tree export. It
@@ -39,7 +49,7 @@ before today; it does now and it is green.
 | `src/support_triage/tools.py` | `execute(store, proposal, approved_by)` now takes the store; the named-human gate is unchanged. |
 | `src/support_triage/cli.py` | `--approve-as` writes through the store and reads the trail back from it. |
 | `src/support_triage/web.py` | `/api` routes moved onto an authenticated router; the page prompts for the token and sends it as a bearer header. Approve and trail endpoints use the store. |
-| `infra/support_triage_stack.py` | S3 bucket (private, encrypted, destroy-with-stack), generated `support-triage/app-token` secret, task role read+put on the bucket, execution role read on the secret, health check sends the token, deployment circuit breaker. Fixed the null execution-role bug found during synth. |
+| `infra/support_triage_stack.py` | S3 bucket (private, encrypted, destroy-with-stack), generated `support-triage/app-token` secret, task role read+put on the bucket, execution role read on the secret, health check sends the token, deployment circuit breaker. Fixed the null execution-role bug found during synth, and — found live during the 2026-11-03 teardown — the log group now dies with the stack. |
 | `src/support_triage/eval_gate.py` | Judges a run against the baseline: per-axis floors as rates snapped up to whole cases, plus a cost ceiling. Exit 0 pass, 1 regression, 2 unusable input; names the axis and the case. |
 | `results/baseline.json` | The floors — severity 1.0, in scope/sla/action/citations 0.9, cost ceiling $0.36 — with the four reference runs they came from. |
 | `.github/workflows/test.yml` | `offline` job on push/PR; `eval` job on manual dispatch only, in the `eval` environment, refusing to start without `OPENROUTER_API_KEY`, uploading `results/eval.json`. |
@@ -69,13 +79,20 @@ before today; it does now and it is green.
 | Load, in-process | `just load` (300/path, concurrency 10) | `/` p50 5.1 ms / p99 17.1 ms · `/api/cases` p50 32.0 ms / p99 64.7 ms |
 | Load, live uvicorn | `just load --url http://127.0.0.1:8012` | `/` p50 3.8 ms / p99 50.6 ms · `/api/cases` p50 16.2 ms / p99 54.5 ms, 480 req/s; `/api/cases` p50 57 ms, 291 req/s at concurrency 16 |
 | Failed audit write | store that raises on `record`, through `TestClient` | HTTP 500 — a failed approval is never reported as an approval (now test-pinned) |
+| Real deploy | `cdk deploy` (167 s), then curl the task public IP | task HEALTHY; page 200, `/api/cases` 401 without a token, 401 with a wrong one, 200 with the Secrets Manager token |
+| Real triage | `POST /api/triage/CASE-1041` on the deployed task | Sev1, 1 h, escalate, routed strong, $0.0347 |
+| Real approval | `POST /api/approve` by name, then `aws s3 ls` | object at `approvals/CASE-1041/2026-11-03T15:01:35Z-f08736fade…json`; empty approver → 400 |
+| Durability across a restart | `update-service --force-new-deployment`, new public IP | trail still listed from S3; approving the lost in-memory record → 404 |
+| Real teardown | `cdk destroy` twice, around the fix | first left 3 log groups → `RemovalPolicy.DESTROY` added, orphans deleted; second left 0 log groups, no bucket, no secret, no cluster |
 | CDK synthesis | `OPENROUTER_API_KEY=dummy CDK_DEFAULT_ACCOUNT=… CDK_DEFAULT_REGION=us-east-1 uv run cdk synth --quiet` | stack synthesizes; one `minHealthyPercent` annotation remains |
 
 ## Not verified / known limits
 
-- **Real AWS.** `moto` proves the S3 adapter's code path, not IAM, secret injection, bucket policy,
-  or the Fargate task's access to the bucket. The stack has not been deployed since the auth fix. A
-  deploy creates billable resources; do not run it without explicit approval.
+- **Real AWS is verified for the paths exercised on 2026-11-03** — deploy, health, gate, triage,
+  approval to S3, restart, teardown, and a second cycle after the log-group fix. Not exercised: a
+  redeploy over a live stack (the circuit-breaker path), secret rotation, a bucket-policy change, and
+  anything under load. A deploy still creates billable resources; do not run it without approval, and
+  `cdk destroy` after.
 - **The eval job has never run end to end.** There is no repository secret and no `eval`
   environment yet, so only the fail-fast path is proven. Set `OPENROUTER_API_KEY` as a **repository
   secret**, and add required reviewers or a spending limit to the `eval` environment before
@@ -114,25 +131,13 @@ before today; it does now and it is green.
 
 ## Next steps, ranked
 
-### 1. Optional: verify the deployed shape against real AWS
+### 1. Re-score the readiness review
 
-- Requires explicit approval; it creates billable resources. Use the deploy auth in `docs/NEXT.md`
-  (`AWS_PROFILE=arch`, SSO session `main`, account `496830984285`, `AdministratorAccess`).
-- From `infra/`: set a real `OPENROUTER_API_KEY`, then `uv run cdk deploy --require-approval never`.
-- Retrieve the token: `aws secretsmanager get-secret-value --secret-id support-triage/app-token
-  --query SecretString --output text`.
-- Triage and approve a case through the UI or API; confirm the approval object exists under
-  `s3://<bucket>/approvals/CASE-1041/`; then `cdk destroy`.
-- **Done when:** the S3 object survives a task restart (or is visible after the approval), the API
-  rejects a request without the token, and `cdk destroy` leaves no stack resources. Note the bucket
-  and secret are destroyed with the stack; the audit trail is not preserved after teardown unless the
-  removal policy is changed.
-
-### 2. Re-score the readiness review
-
+- **Blocked:** the review note with the 12-dimension rubric is not in this repo and could not be
+  found under `~/code`; re-scoring needs it pasted or pointed at.
 - Re-run the five-vector/four-question rubric against this state. Dimensions 11 (security and
-  permissions) and the evaluation dimension should move; the remaining gaps are cache, capacity,
-  operability, and the unproven eval job.
+  permissions) and the evaluation dimension should move; the remaining gaps are alarms and the
+  unproven eval job.
 - **Done when:** the review note and registry entry carry a current dimension count and a next gap.
 - Note for the re-score: gap #3 is closed as a *compute* fix, with the token saving refused rather
   than shipped. If a reviewer wants the 14%, the honest route is a facts-conditioned candidate set
@@ -151,6 +156,7 @@ APP_TOKEN=dev just web          # enter "dev" in the token bar
 just eval                       # ten cases, real spend (~$0.30); needs OPENROUTER_API_KEY
 just eval-gate                  # judge results/eval.json against results/baseline.json; no spend
 gh workflow run test.yml        # the CI eval job; needs the repo secret, spends ~$0.30
+(cd infra && uv run cdk deploy --require-approval never)   # billable; cdk destroy after
 ```
 
 - `OPENROUTER_API_KEY` is needed for real triage/eval only; never commit it.
@@ -168,4 +174,4 @@ gh workflow run test.yml        # the CI eval job; needs the repo secret, spends
 1. `just test`; confirm 40 pass.
 2. `just eval-gate`; confirm the recorded run clears the baseline.
 3. Read `docs/NEXT.md` for the measured results and the bugs already found.
-4. The only ranked work left is the AWS verification (needs approval) and the readiness re-score.
+4. The only ranked work left is the readiness re-score, which needs the review note.

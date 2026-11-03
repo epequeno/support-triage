@@ -183,6 +183,19 @@ aws secretsmanager get-secret-value --secret-id support-triage/app-token \
   --query SecretString --output text
 ```
 
+**Verified against real AWS on 2026-11-03**, not just in `moto`: deployed (167 s), the page answered
+200 while `/api/cases` answered 401 without the token and 401 with a wrong one; CASE-1041 triaged
+through the deployed API (Sev1, 1 h, escalation proposed, routed strong, $0.035); approved by a named
+human, with the object landing at `s3://<bucket>/approvals/CASE-1041/<timestamp>-<uuid>.json`; an
+empty approver rejected with 400; the task then replaced — new public IP, and the approval trail came
+back from S3 on the new task while approving the lost in-memory record returned 404, which is the
+line between what is durable and what is not. One defect only a real teardown could find: the
+container's **CloudWatch log group was retained** on `cdk destroy` (two empty groups from the
+October deploy were still there), so every deploy leaked one. The stack now sets
+`RemovalPolicy.DESTROY` on it, the orphans were deleted, and a second deploy/destroy cycle left zero
+log groups, no bucket, no secret and no cluster. The only residue is the image in the shared CDK
+bootstrap ECR repo.
+
 **One caveat worth copying correctly:** the demo stack still passes the OpenRouter key as a plain
 task-definition environment variable. The app token does not — it comes from Secrets Manager. The
 key shortcut is acceptable only for a stack that is torn down within the hour, and it is spelled

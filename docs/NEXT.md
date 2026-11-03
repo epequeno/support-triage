@@ -202,6 +202,22 @@ discrimination an n=10 non-deterministic eval can honestly offer. A regression p
 the case and the floor; the exit status is the check. The eval job runs in the `eval` environment
 and refuses to start without `OPENROUTER_API_KEY`.
 
+**The deployed shape, verified for real (2026-11-03).** Deployed with the auth and S3 changes
+(`cdk deploy`, 167 s): the task reported HEALTHY — which is itself the proof that the token reached
+the container from Secrets Manager, since the health check sends it — the page answered 200 while
+`/api/cases` answered 401 without a token and 401 with a wrong one. CASE-1041 triaged through the
+deployed API: Sev1, 1 h, escalation proposed, routed strong with its reasons, $0.0347 of real spend.
+Approved by a named human; the object appeared at
+`s3://<bucket>/approvals/CASE-1041/2026-11-03T15:01:35Z-f08736fade904316a30f8568557c9a93.json`; an
+empty approver got 400. The task was then replaced: new public IP, the trail came back from S3 on
+the new task, and approving the lost in-memory record returned 404 — the durable line, demonstrated.
+**One defect only a real teardown finds:** `cdk destroy` left the container's CloudWatch log group
+behind (two empty groups from the October deploy were still there, plus the new one), because
+CloudFormation retains log groups by default. The stack now sets `RemovalPolicy.DESTROY` on it, the
+orphans were deleted, and a second deploy/destroy cycle left **zero** log groups, no bucket, no
+secret and no cluster — only the image in the shared CDK bootstrap ECR repo. Same lesson as the
+October teardown: the teardown is part of the system, and only running it proves it.
+
 **Load and operability, measured (2026-11-03).** `just load` drives the API in-process or against a
 live `just web`: single uvicorn worker, one SQLite connection per request, 32-core dev box, 200–300
 requests per path. At concurrency 10, `/` runs p50 3.8 ms / p99 50.6 ms and `/api/cases` p50

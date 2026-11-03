@@ -11,7 +11,7 @@ pretending an on-call rotation exists.
 |---|---|
 | The app | `http://<task public IP>:8000` — the IP changes when the task is replaced |
 | Task and service events | ECS console → cluster from the CDK stack → service `support-triage` |
-| Application logs | CloudWatch log group from the stack (stream prefix `triage`), **1-day retention** |
+| Application logs | CloudWatch log group from the stack (stream prefix `triage`), **1-day retention**, deleted with the stack |
 | The app token | Secrets Manager `support-triage/app-token` |
 | The audit trail | S3 bucket from the stack, `approvals/<case_id>/<timestamp>-<uuid>.json` |
 | Spend so far | `http://<ip>:8000/api/ledger` (with the bearer token), or `just check` locally |
@@ -113,7 +113,7 @@ container).
 
 - **No alarms.** Nothing pages anyone; every check above is manual. That is the operability gap the
   readiness review flagged.
-- **Retention.** Logs are kept for one day; the approvals bucket and the secret are destroyed with
+- **Retention.** Logs are kept for one day and the log group dies with the stack; the approvals bucket and the secret are destroyed with
   the stack. If an audit trail must outlive the deploy, change the bucket's removal policy first.
 - **One task, no ALB.** There is a single point of failure and no rolling upgrade that keeps serving
   traffic; `minHealthyPercent` is the default 50%.
