@@ -189,18 +189,23 @@ and gap #2 (CI + an eval gate) is closed by the same day's second commit. See
 [`HANDOFF.md`](../HANDOFF.md) for what is verified and what is not. The M7 sentence above described
 the repo at that time.
 
-**CI and the eval gate, measured (2026-11-03).** `.github/workflows/test.yml` runs the offline
-suite on every push and pull request — `uv sync --frozen`, `uv run pytest -q`, 40 tests, no key and
-no network — plus an `eval` job on manual dispatch that seeds the org, spends one real routed run
-and gates it. `python -m support_triage.eval_gate` judges a run against `results/baseline.json`:
+**CI and the eval gate, measured (2026-11-03).** A GitHub Actions workflow ran the offline suite on
+every push and pull request — `uv sync --frozen`, `uv run pytest -q`, 40 tests, no key and no
+network — plus an `eval` job on manual dispatch that seeded the org, spent one real routed run and
+gated it. **That workflow is now disabled at the owner's request:** it was moved verbatim to
+`ci/github-actions-test.yml` (outside `.github/workflows/`, so GitHub never reads it) and is kept as
+a working artifact, with `ci/README.md` holding the steps to re-enable it. The two green runs
+recorded in the handoff happened before the move. The gate is unaffected — `just eval-gate` is the
+check; the workflow was only what ran it on a schedule. `python -m support_triage.eval_gate` judges a run against `results/baseline.json`:
 severity's floor is 1.0 (perfect in all forty recorded case-draws), the other four axes 0.9, each
 snapped up to whole cases at the size of the run; a $0.36 cost ceiling fails a run whose router
 degraded to strong-everywhere (forced strong measured $0.51 against $0.30 routed). All four
 committed runs clear it, including `eval-dist-2.json`, the one that missed `CASE-1046` on four
 axes — so the gate tolerates the known wobble and fails on a second wobble, which is the
 discrimination an n=10 non-deterministic eval can honestly offer. A regression prints the axis,
-the case and the floor; the exit status is the check. The eval job runs in the `eval` environment
-and refuses to start without `OPENROUTER_API_KEY`.
+the case and the floor; the exit status is the check. The (disabled) eval job is configured to run in the `eval`
+environment and to refuse to start without `OPENROUTER_API_KEY`; nothing is wired to it now, so the
+gate is run by hand.
 
 **The review, re-scored (2026-11-03).** The five-vector change matrix and the twelve dimensions
 were re-scored after the work above: **11 of 12 at L2**, with the only L1 left being identity and

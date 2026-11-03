@@ -13,10 +13,12 @@ Six readiness-review gaps closed, the deployed shape verified against real AWS, 
    token; approvals are written through an `ApprovalStore` — SQLite locally, S3 when
    `APPROVALS_BUCKET` is set. The CDK stack creates the bucket and a generated Secrets Manager app
    token, the health check sends the token, and deployments fail fast with a circuit breaker.
-2. **CI and an eval gate** (`3ad9418`, plus the action-pin fix). `.github/workflows/test.yml` runs
-   the 40-test offline suite on every push and pull request. A manual-dispatch `eval` job runs one
-   real routed eval (~$0.30) and gates it with `python -m support_triage.eval_gate` against
-   `results/baseline.json`.
+2. **CI and an eval gate** (`3ad9418`, plus the action-pin fix). A workflow ran the 40-test offline
+   suite on every push and pull request, and a manual-dispatch `eval` job ran one real routed eval
+   (~$0.30) gated by `python -m support_triage.eval_gate` against `results/baseline.json`. **The
+   workflow was then disabled at the owner's request** — it is kept, working and documented, at
+   `ci/github-actions-test.yml`, outside `.github/workflows/`, so GitHub does not read it. The gate
+   itself is unaffected: `just eval-gate` is the check, the workflow was only its trigger.
 3. **The per-policy cache** (`89e8f84`). The corpus is parsed once per process per file version,
    indexed once, and each section's terms and rendered block are computed once and reused, so the
    classify prompt is assembled rather than rebuilt six times per case. `retrieve(k=…)` can no
@@ -56,7 +58,7 @@ before today; it does now and it is green.
 | `infra/support_triage_stack.py` | S3 bucket (private, encrypted, destroy-with-stack), generated `support-triage/app-token` secret, task role read+put on the bucket, execution role read on the secret, health check sends the token, deployment circuit breaker. Fixed the null execution-role bug found during synth, and — found live during the 2026-11-03 teardown — the log group now dies with the stack. |
 | `src/support_triage/eval_gate.py` | Judges a run against the baseline: per-axis floors as rates snapped up to whole cases, plus a cost ceiling. Exit 0 pass, 1 regression, 2 unusable input; names the axis and the case. |
 | `results/baseline.json` | The floors — severity 1.0, in scope/sla/action/citations 0.9, cost ceiling $0.36 — with the four reference runs they came from. |
-| `.github/workflows/test.yml` | `offline` job on push/PR; `eval` job on manual dispatch only, in the `eval` environment, refusing to start without `OPENROUTER_API_KEY`, uploading `results/eval.json`. |
+| `ci/github-actions-test.yml` · `ci/README.md` | The pipeline as an **artifact, not wired**: `offline` job on push/PR; `eval` job on manual dispatch only, in the `eval` environment, refusing to start without `OPENROUTER_API_KEY`. `ci/README.md` says how to enable it and what does not run meanwhile. |
 | `src/support_triage/policy.py` | Per-policy-id caches: parse keyed by file identity (mtime, size), terms and rendered blocks keyed by the section's own text, `index()` derived once and returned read-only. `retrieve` keeps the mandatory sections at any `k`. |
 | `src/support_triage/agent.py` | `_prompt` resolves the corpus index once instead of twice per candidate. Prompt bytes unchanged. |
 | `src/support_triage/load.py` · `results/load.json` | p50/p95/p99 and throughput per path, in-process or against a live URL. Recorded run: 300 requests/path at concurrency 10. |
@@ -69,8 +71,8 @@ before today; it does now and it is green.
 | check | command | result |
 |---|---|---|
 | Offline suite | `uv sync --frozen && uv run pytest -q` | 39 passed in ~0.3 s |
-| CI on push | `git push origin main` → run 41656259069 | **green**; `offline suite` success, `eval gate` correctly skipped |
-| Eval job wiring | `gh workflow run test.yml` → run 41656367230 | actions resolve, then `OPENROUTER_API_KEY is not set; the eval spends real credit and will not run blind` — **fails before any spend** |
+| CI on push (before it was disabled) | `git push origin main` → run 41656259069 | **green**; `offline suite` success, `eval gate` correctly skipped |
+| Eval job wiring (before it was disabled) | `gh workflow run test.yml` → run 41656367230 | actions resolve, then `OPENROUTER_API_KEY is not set; the eval spends real credit and will not run blind` — **fails before any spend** |
 | Gate, recorded runs | `just eval-gate` over `eval.json` and `eval-dist-1..3` | all four PASS, including the run that missed `CASE-1046` on four axes |
 | Gate, regression | synthetic run with two citations misses + `$0.52` | exit 1; prints `citations: 8/10 below the floor of 9/10`, the two cases, and the cost breach |
 | Gate, bad input | missing file | exit 2 with the OS error |
@@ -111,6 +113,11 @@ before today; it does now and it is green.
   degrades 70× from concurrency 1 to 16 — the per-request `backend.connect()`, not the query (the
   handler body is 0.1 ms). A thread-local connection pool is the fix if this ever serves more than a
   demo; it was deliberately not built.
+- **CI is disabled by choice.** The workflow is complete and one `git mv` from running
+  (`ci/README.md`), but nothing runs on push, no repository secret is set, and `main` is unprotected —
+  so the green suite and the eval gate are discipline, not enforcement. Dimension 10's L2 rests on
+  the gate existing and being runnable (`just eval-gate`), not on CI; its L3 ("gate blocks
+  promotion") needs the workflow enabled plus required checks.
 - **The gate is a judgment at n=10.** Its floors tolerate exactly one miss on the four 0.9 axes and
   none on severity, because that is what the forty recorded case-draws support. It is not a
   statistical test; it is a tripwire that also prices the run.
@@ -149,9 +156,9 @@ before today; it does now and it is green.
 
 - **Alarms (~half day, dimension 9's L3):** task health, 5xx rate, approval-store errors, spend —
   plus the decision on who is paged, which today is "nobody".
-- **Required checks (~1–2 h, dimension 10's L3):** `main` is unprotected and history is direct
-  commits, so the green suite does not block anything. Protect the branch, require the check, and
-  schedule the eval run for drift.
+- **Required checks (~1–2 h, dimension 10's L3):** re-enable the workflow from `ci/` (one `git mv`),
+  protect `main`, require the offline check, and schedule the eval run for drift. Today nothing is
+  automatic and nothing blocks.
 - **Token economics (a day, ~$0.30 of eval, dimension 4's L3):** a facts-conditioned candidate set
   with a routed eval proving no axis loss. The 14% saving is refused today on measurement, not
   unimplemented by accident.
@@ -180,7 +187,7 @@ gh workflow run test.yml        # the CI eval job; needs the repo secret, spends
   in the task definition.
 - `cdk synth` without deploying: from `infra/`, set `OPENROUTER_API_KEY=dummy` and the CDK account/
   region, then `uv run cdk synth --quiet`.
-- `uv` is pinned in CI at `astral-sh/setup-uv@v10.3.3` — the action publishes no moving `v10` tag.
+- `uv` is pinned in the workflow artifact at `astral-sh/setup-uv@v10.3.3` — the action publishes no moving `v10` tag.
 
 ## First 30 minutes
 

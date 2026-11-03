@@ -82,7 +82,7 @@ runbook: what is running, where to look, and the three incidents this deploy can
 **M0 done, the eval (M5) runs, routing is measured, the web UI (M3), OTEL traces (M4) and the
 AWS deploy (M6) are built.** Built: the mock support org, the citable policy corpus, the
 LangGraph graph, model routing, the approval gate, cost accounting with a per-case cap, the
-CLI, the thin web UI (`just web`), span-tree traces on every run, 40 offline tests in CI, and
+CLI, the thin web UI (`just web`), span-tree traces on every run, 40 offline tests, and
 `just eval` over all ten cases with held-out truth, gated against a recorded baseline.
 
 Production readiness, re-scored on 2026-11-03 against a twelve-dimension rubric (five change vectors
@@ -119,12 +119,18 @@ right 12h "corrected" into a wrong 1h. Security cases have a defined severity (`
 Sev2), and the repair path survives an exception raised bare (an empty `args` tuple used to crash
 the repair itself, mid-eval).
 
-## CI and the eval gate
+## The eval gate, and the CI artifact
 
-`.github/workflows/test.yml` runs the offline suite on every push and pull request — `uv sync
---frozen`, then `uv run pytest -q`, 40 tests, no API key and no network — and a separate
-`eval gate (real spend)` job that only runs on manual dispatch: it seeds the org, spends one real
-routed eval run (~$0.30), and judges the result.
+The gate is a script, and it runs anywhere: `python -m support_triage.eval_gate` (`just
+eval-gate`) judges an eval run against `results/baseline.json` and exits non-zero on a regression.
+
+The workflow that would run it automatically is checked in as **`ci/github-actions-test.yml`** and
+is **not wired** — it lives outside `.github/workflows/`, so GitHub never reads it and nothing runs
+on push. That is deliberate: the pipeline is kept as an artifact and a one-move switch, and
+`ci/README.md` has the exact steps. When enabled it runs the offline suite (`uv sync --frozen`,
+`uv run pytest -q`, 40 tests, no API key, no network) on every push and pull request, and a
+manual-dispatch `eval gate (real spend)` job that seeds the org, spends one real routed eval run
+(~$0.30) and judges the result.
 
 The judgment is `python -m support_triage.eval_gate` (`just eval-gate`) against
 `results/baseline.json`, which records the floors from the four committed routed runs: severity
@@ -135,9 +141,11 @@ regress is silently: a router that stops routing is more accurate and much more 
 strong measured $0.51 against $0.30 routed). A failure prints the axis, the case, and what the
 floor was; the exit status is the check.
 
-The eval job needs the repository secret `OPENROUTER_API_KEY` and checks for it before spending.
-It runs in the `eval` environment — add required reviewers or a spending limit there if the repo
-is shared.
+Because the workflow is not wired, **nothing blocks a merge today** — the suite and the gate are
+green when run and red when broken, and running them is a habit rather than an enforcement. The
+disabled job is also why no repository secret is configured; the real-eval path needs
+`OPENROUTER_API_KEY` set as a repository secret and an `eval` environment with reviewers or a
+spending limit.
 
 ## Under load, measured (2026-11-03)
 
