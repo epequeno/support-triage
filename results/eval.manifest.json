@@ -1,0 +1,13 @@
+{
+  "artifact": "results/eval.json",
+  "recorded": "2026-10-12",
+  "source_commit": "ce84d9a4f371dc903005c7e6315f81b016e838ba",
+  "backfilled": "2026-11-03",
+  "models": {
+    "cheap": "google/gemini-2.5-flash-lite",
+    "strong": "openai/gpt-5"
+  },
+  "corpus_sha256": "567adfb93a8c92e5cb07424463cf135179db0f93b670647dd18873258e823092",
+  "prompt_sha256": "da386c73685999c735202e70b6c8bf59d12afcc1f265fc2e37afb6704621d674",
+  "note": "The 2026-10-12 run predates automated provenance. These values are the default model ids and the corpus/prompt bytes at the commit that recorded the run. New runs write the same block directly into results/eval.json and each trace root."
+}

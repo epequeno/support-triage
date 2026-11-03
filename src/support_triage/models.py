@@ -167,3 +167,8 @@ class TriageRecord(BaseModel):
     output_tokens: int = 0
     cost_usd: float = 0.0
     notes: list[str] = Field(default_factory=list)
+    # The model ids actually used (fake-… in tests), the corpus version and the prompt version.
+    # Defaults keep older callers and recorded JSON decodable.
+    models: list[str] = Field(default_factory=list)
+    corpus_sha256: str = ""
+    prompt_sha256: str = ""

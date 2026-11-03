@@ -10,8 +10,9 @@ import json
 
 import pytest
 
-from support_triage import approvals, backend, costs, policy, router, seed, tools, traces
-from support_triage.agent import CitationError, TriageAgent
+from support_triage import approvals, backend, costs, policy, provenance, router, seed, tools, traces
+from support_triage import eval as eval_module
+from support_triage.agent import CitationError, PROMPT_SHA256, TriageAgent
 from support_triage.models import Classification, Severity
 
 
@@ -300,11 +301,35 @@ def test_a_triage_is_a_span_tree_not_a_wall_of_text(conn):
     assert tree["attributes"]["case_id"] == record.case_id
     assert tree["attributes"]["severity"] == "Sev1"
     assert tree["attributes"]["next_action"] == "escalate"
+    assert tree["attributes"]["models"] == "fake-strong"
+    assert tree["attributes"]["corpus_sha256"] == provenance.corpus_sha256()
+    assert tree["attributes"]["prompt_sha256"] == PROMPT_SHA256
+    assert record.models == ["fake-strong"]
+    assert record.corpus_sha256 == provenance.corpus_sha256()
+    assert record.prompt_sha256 == PROMPT_SHA256
     names = {n["name"] for n in _flatten(tree)}
     assert {"node.gather", "node.route", "node.retrieve", "node.classify", "node.draft",
             "node.propose", "node.assemble", "model.classify", "model.draft"} <= names
     classify = next(n for n in _flatten(tree) if n["name"] == "model.classify")
     assert classify["attributes"]["tier"] == "strong"
+
+
+def test_eval_payload_names_the_models_corpus_and_prompt(conn, tmp_path, monkeypatch):
+    """A run is reproducible from the repo alone: the payload and each row say what produced it."""
+    verdict = Classification(severity=Severity.SEV1, in_scope=True, sla_response_hours=1.0,
+                             next_action="escalate",
+                             citations=["POL-SEV-1", "POL-SLA-1", "POL-ESC-1"])
+    agent = make_agent("strong", verdict)
+    agent.conn = conn
+    monkeypatch.setattr(eval_module.backend, "connect", lambda: conn)
+    monkeypatch.setattr(eval_module, "build_agent", lambda *args, **kwargs: agent)
+
+    out = tmp_path / "eval.json"
+    assert eval_module.main(["--limit", "1", "--out", str(out), "--quiet"]) == 0
+    payload = json.loads(out.read_text(encoding="utf-8"))
+
+    assert payload["provenance"] == provenance.snapshot(PROMPT_SHA256)
+    assert payload["rows"][0]["models"] == ["fake-strong"]
 
 
 def test_a_repair_is_a_span_of_its_own(conn):

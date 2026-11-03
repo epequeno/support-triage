@@ -9,12 +9,14 @@ Nothing here writes to the support org. State changes come out as proposals (too
 
 from __future__ import annotations
 
+import hashlib
+import inspect
 import os
 from typing import Any, Protocol, TypedDict
 
 from langgraph.graph import END, StateGraph
 
-from . import costs, policy, router, tools, traces
+from . import costs, policy, provenance, router, tools, traces
 from .models import Classification, Proposal, RoutingDecision, Severity, SEVERITY_LABEL, TriageRecord
 
 _tracer = traces.tracer()
@@ -52,6 +54,7 @@ class TriageState(TypedDict, total=False):
     input_tokens: int
     output_tokens: int
     cost_usd: float
+    models: list[str]
     record: dict
 
 
@@ -101,6 +104,11 @@ def _prompt(context: dict, candidates: list[dict]) -> str:
     return "\n".join(lines)
 
 
+# The prompt is code; this digest changes whenever its source changes. The record and trace carry
+# it, so a run names the exact prompt shape that produced it.
+PROMPT_SHA256 = hashlib.sha256(inspect.getsource(_prompt).encode("utf-8")).hexdigest()
+
+
 class TriageAgent:
     def __init__(self, conn, callers: dict[str, Caller], cap_usd: float = costs.DEFAULT_CAP_USD,
                  force_tier: str | None = None):
@@ -115,7 +123,7 @@ class TriageAgent:
     def _gather(self, state: TriageState) -> TriageState:
         context = tools.get_case_context(self.conn, state["case_id"])
         return {"context": context, "notes": [], "calls": 0, "input_tokens": 0, "output_tokens": 0,
-                "cost_usd": 0.0}
+                "cost_usd": 0.0, "models": []}
 
     @traces.span("node.route")
     def _route(self, state: TriageState) -> TriageState:
@@ -259,6 +267,9 @@ class TriageAgent:
             output_tokens=state.get("output_tokens", 0),
             cost_usd=round(state.get("cost_usd", 0.0), 6),
             notes=state.get("notes", []),
+            models=state.get("models", []),
+            corpus_sha256=provenance.corpus_sha256(),
+            prompt_sha256=PROMPT_SHA256,
         )
         return {"record": record.model_dump()}
 
@@ -296,6 +307,9 @@ class TriageAgent:
             span.set_attribute("next_action", record.next_action)
             span.set_attribute("tier", record.routing.tier)
             span.set_attribute("cost_usd", record.cost_usd)
+            span.set_attribute("models", ",".join(record.models))
+            span.set_attribute("corpus_sha256", record.corpus_sha256)
+            span.set_attribute("prompt_sha256", record.prompt_sha256)
             if abs(record.cost_usd - round(self.ledger.spent_usd, 6)) > 1e-9:
                 raise AssertionError("logged cost and ledger disagree; the cost meter is lying")
             return record
@@ -308,18 +322,21 @@ def _merge_usage(a: Usage, b: Usage) -> Usage:
 
 
 def _usage_state(state: TriageState, usage: Usage, cost: float) -> dict[str, Any]:
+    models = set(state.get("models", []))
+    if usage.get("model"):
+        models.add(usage["model"])
     return {"calls": state.get("calls", 0) + 1,
             "input_tokens": state.get("input_tokens", 0) + usage.get("input_tokens", 0),
             "output_tokens": state.get("output_tokens", 0) + usage.get("output_tokens", 0),
-            "cost_usd": state.get("cost_usd", 0.0) + cost}
+            "cost_usd": state.get("cost_usd", 0.0) + cost,
+            "models": sorted(models)}
 
 
 # ── the real model boundary ──────────────────────────────────────────────────────────────────────
 
 # Verified against the provider catalogue on 2026-10-11. Override with TRIAGE_MODEL_CHEAP /
 # TRIAGE_MODEL_STRONG; routing is by tier, never by name.
-MODELS = {"cheap": os.environ.get("TRIAGE_MODEL_CHEAP", "google/gemini-2.5-flash-lite"),
-          "strong": os.environ.get("TRIAGE_MODEL_STRONG", "openai/gpt-5")}
+MODELS = provenance.MODEL_IDS
 
 
 class OpenRouterCaller:

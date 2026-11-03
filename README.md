@@ -82,14 +82,15 @@ runbook: what is running, where to look, and the three incidents this deploy can
 **M0 done, the eval (M5) runs, routing is measured, the web UI (M3), OTEL traces (M4) and the
 AWS deploy (M6) are built.** Built: the mock support org, the citable policy corpus, the
 LangGraph graph, model routing, the approval gate, cost accounting with a per-case cap, the
-CLI, the thin web UI (`just web`), span-tree traces on every run, 40 offline tests, and
+CLI, the thin web UI (`just web`), span-tree traces on every run, 41 offline tests, and
 `just eval` over all ten cases with held-out truth, gated against a recorded baseline.
 
 Production readiness, re-scored on 2026-11-03 against a twelve-dimension rubric (five change vectors
-× four questions): **11 of 12 dimensions at L2**. The one shortfall is provenance — a run records
-its tier and cost but not its model version or corpus digest, so it is not reproducible from the
-repo alone. That is a two-hour gap, and the honest headline: not production ready, by one dimension,
-with the rest measured.
+× four questions): **12 of 12 dimensions at L2**. A run now records its model ids, the
+`corpus/policy.md` digest, and the classify-prompt digest in each record, trace root, and eval
+payload; the recorded 2026-10-12 run is backfilled in `results/eval.manifest.json`. The honest
+headline is the one the review asked for: production ready by the rubric's bar, with the remaining
+work named as L3 decisions rather than gaps.
 
 The routing experiment (real API, all ten cases, 2026-10-12). "Pre-fix" rows ran before the
 retrieval fix below; "post-fix" rows after:
@@ -128,7 +129,7 @@ The workflow that would run it automatically is checked in as **`ci/github-actio
 is **not wired** — it lives outside `.github/workflows/`, so GitHub never reads it and nothing runs
 on push. That is deliberate: the pipeline is kept as an artifact and a one-move switch, and
 `ci/README.md` has the exact steps. When enabled it runs the offline suite (`uv sync --frozen`,
-`uv run pytest -q`, 40 tests, no API key, no network) on every push and pull request, and a
+`uv run pytest -q`, 41 tests, no API key, no network) on every push and pull request, and a
 manual-dispatch `eval gate (real spend)` job that seeds the org, spends one real routed eval run
 (~$0.30) and judges the result.
 

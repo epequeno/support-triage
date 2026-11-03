@@ -7,7 +7,7 @@ greenfield — M0–M7 are built, the demo runs, and the working tree is clean.
 
 ## Current state
 
-Six readiness-review gaps closed, the deployed shape verified against real AWS, and the review re-scored, on 2026-11-03:
+Seven readiness-review gaps closed, the deployed shape verified against real AWS, and the review re-scored, on 2026-11-03:
 
 1. **Caller auth and a durable audit trail** (`ab2dd7d`). Every `/api` route requires a bearer
    token; approvals are written through an `ApprovalStore` — SQLite locally, S3 when
@@ -34,10 +34,12 @@ Six readiness-review gaps closed, the deployed shape verified against real AWS, 
    nothing behind — after one fix: the container's log group was retained by every `cdk destroy`,
    leaking a group per deploy (two from October were still there). The stack now sets
    `RemovalPolicy.DESTROY` on it and a second cycle left zero.
-7. **The readiness review re-scored** (`notes/2026-11-03-production-readiness-support-triage.md` §8,
-   outside the repo). **11 of 12 dimensions at L2**, one short: dimension 1, identity and provenance,
-   stays L1 because a run records neither the model version nor a corpus digest. The bar needs L2 on
-   dimension 1, so the verdict is still "not production ready" — by one dimension, not six.
+7. **Provenance in the run manifest**, and the re-score. Every `TriageRecord`, trace root and
+   `eval.json` payload now carries the actual model ids, the `corpus/policy.md` SHA-256 and the
+   classify-prompt SHA-256. `results/eval.manifest.json` backfills the recorded 2026-10-12 run
+   from the commit that produced it. The readiness review is therefore **12 of 12 dimensions at
+   L2**: production ready by the rubric's bar, with the remaining work an L3 decision rather than a
+   gap.
 
 `src/support_triage/traces.py` carries the **pre-existing 2026-10 edit**: optional OTLP export to
 the shared collector when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, on top of the file-tree export. It
@@ -60,17 +62,21 @@ before today; it does now and it is green.
 | `results/baseline.json` | The floors — severity 1.0, in scope/sla/action/citations 0.9, cost ceiling $0.36 — with the four reference runs they came from. |
 | `ci/github-actions-test.yml` · `ci/README.md` | The pipeline as an **artifact, not wired**: `offline` job on push/PR; `eval` job on manual dispatch only, in the `eval` environment, refusing to start without `OPENROUTER_API_KEY`. `ci/README.md` says how to enable it and what does not run meanwhile. |
 | `src/support_triage/policy.py` | Per-policy-id caches: parse keyed by file identity (mtime, size), terms and rendered blocks keyed by the section's own text, `index()` derived once and returned read-only. `retrieve` keeps the mandatory sections at any `k`. |
-| `src/support_triage/agent.py` | `_prompt` resolves the corpus index once instead of twice per candidate. Prompt bytes unchanged. |
+| `src/support_triage/agent.py` | `_prompt` resolves the corpus index once instead of twice per candidate. Prompt bytes unchanged. The same file now hashes the prompt source and writes the model ids, corpus digest and prompt digest into every record and trace root. |
+| `src/support_triage/provenance.py` | The single source for the model ids and the `corpus/policy.md` SHA-256; `eval` writes the snapshot into the run payload. |
+| `src/support_triage/models.py` · `cli.py` | `TriageRecord` carries `models`, `corpus_sha256` and `prompt_sha256`; the CLI prints them. |
+| `results/eval.manifest.json` | Backfills the recorded 2026-10-12 run with the default models and the corpus/prompt bytes at commit `ce84d9a`. |
 | `src/support_triage/load.py` · `results/load.json` | p50/p95/p99 and throughput per path, in-process or against a live URL. Recorded run: 300 requests/path at concurrency 10. |
 | `docs/RUNBOOK.md` | One page: first five minutes, the three incidents, escalation, and the gaps it does not paper over. |
-| tests | `tests/test_web.py` (page open, API 401, fail-closed 503, approve through the store), `tests/test_eval_gate.py` (recorded run passes, one noise miss passes, two misses fail and are named, severity miss fails, cost blowup fails, partial and inconsistent runs refused, CLI exit codes), a failed audit write case, and three cache tests (mandatory sections survive any query and any `k`; the cache renders byte-for-byte what a fresh parse renders; a corpus edit is never served stale). **40 tests pass.** |
+| tests | `tests/test_web.py` (page open, API 401, fail-closed 503, approve through the store), `tests/test_eval_gate.py` (recorded run passes, one noise miss passes, two misses fail and are named, severity miss fails, cost blowup fails, partial and inconsistent runs refused, CLI exit codes), a failed audit write case, three cache tests (mandatory sections survive any query and any `k`; the cache renders byte-for-byte what a fresh parse renders; a corpus edit is never served stale), and a provenance test (record, trace root and eval payload name the models and corpus/prompt digests). **41 tests pass.** |
 | docs | README run instructions, auth/approval file table, deploy caveat, CI/eval-gate section; `docs/NEXT.md` records the gate and its thresholds. |
 
 ## Verified
 
 | check | command | result |
 |---|---|---|
-| Offline suite | `uv sync --frozen && uv run pytest -q` | 39 passed in ~0.3 s |
+| Offline suite | `uv sync --frozen && uv run pytest -q` | 41 passed in ~0.3 s |
+| Provenance | `uv run pytest -q tests/test_triage.py -k provenance` | record, trace root and eval payload name the models, corpus digest and prompt digest |
 | CI on push (before it was disabled) | `git push origin main` → run 41656259069 | **green**; `offline suite` success, `eval gate` correctly skipped |
 | Eval job wiring (before it was disabled) | `gh workflow run test.yml` → run 41656367230 | actions resolve, then `OPENROUTER_API_KEY is not set; the eval spends real credit and will not run blind` — **fails before any spend** |
 | Gate, recorded runs | `just eval-gate` over `eval.json` and `eval-dist-1..3` | all four PASS, including the run that missed `CASE-1046` on four axes |
@@ -137,22 +143,15 @@ before today; it does now and it is green.
   endpoint for local end-to-end.
 - **Triage records are still in memory.** Only approvals are durable. A task restart loses the
   server-side records the approve endpoint reads.
-- **The readiness review's dimension count is stale.** Re-score after the auth and CI fixes; the
-  verdict remains "not production ready" until the cache, capacity, and operability gaps close.
+- **The recorded eval's provenance is backfilled.** `results/eval.json` predates the provenance
+  fields; `results/eval.manifest.json` records the default model ids and the corpus/prompt bytes at
+  commit `ce84d9a`. New runs write those fields directly.
 
 ## Next steps, ranked
 
-### 1. Record provenance in the run manifest (the only dimension below L2, ~2 h)
+### 1. Alarms, required checks, and the token economics
 
-- `results/eval.json` rows carry `tier` but not the model; no run records the corpus digest or a
-  prompt hash; traces carry the model per call but are gitignored and not tied to a commit.
-- Put the model id, a digest of `corpus/policy.md`, and a hash of the prompt template in the trace
-  root span and in each eval row (or a run manifest beside it). Then a run is reproducible from the
-  repo alone.
-- **Done when:** `results/eval.json` names the model and the corpus version, and dimension 1 can be
-  scored L2 against its own evidence — after which the project passes the rubric's bar.
-
-### 2. Alarms, required checks, and the token economics
+The rubric is at 12/12 L2. What remains is L3 operational maturity, not a correctness gap.
 
 - **Alarms (~half day, dimension 9's L3):** task health, 5xx rate, approval-store errors, spend —
   plus the decision on who is paged, which today is "nobody".
@@ -168,7 +167,7 @@ before today; it does now and it is green.
 ```bash
 cd ~/code/support-triage
 just sync && just seed          # seed the mock org if supportorg.db is missing
-just test                       # 40 offline tests, no key
+just test                       # 41 offline tests, no key
 just load --url http://127.0.0.1:8000   # p50/p99 for the API against a live `just web`
 just triage CASE-1041           # one case end to end
 just triage CASE-1041 --approve-as "Your Name"
@@ -191,7 +190,7 @@ gh workflow run test.yml        # the CI eval job; needs the repo secret, spends
 
 ## First 30 minutes
 
-1. `just test`; confirm 40 pass.
+1. `just test`; confirm 41 pass.
 2. `just eval-gate`; confirm the recorded run clears the baseline.
 3. Read `docs/NEXT.md` for the measured results and the bugs already found.
-4. Pick step 1 (provenance) — it is the last dimension between this and the rubric's bar.
+4. Pick step 1 (alarms, required checks, token economics) — the remaining work is L3 operations.

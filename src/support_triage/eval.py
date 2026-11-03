@@ -16,8 +16,8 @@ import json
 import sys
 from pathlib import Path
 
-from . import backend, costs
-from .agent import build_agent
+from . import backend, costs, provenance
+from .agent import PROMPT_SHA256, build_agent
 
 RESULTS = Path(__file__).resolve().parents[2] / "results"
 
@@ -62,7 +62,8 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:  # noqa: BLE001 — a refused or failed case is a result, not a crash
             rows.append({"case": case["case_id"], "error": f"{type(exc).__name__}: {exc}",
                          "score": {axis: False for axis in AXES}, "cost_usd": 0.0,
-                         "tier": args.tier or "?", "severity": "-", "expected": truth["severity"]})
+                         "tier": args.tier or "?", "models": [],
+                         "severity": "-", "expected": truth["severity"]})
             continue
         score = score_case(record, truth)
         for axis, ok in score.items():
@@ -74,14 +75,16 @@ def main(argv: list[str] | None = None) -> int:
             "severity": str(record.severity), "expected": truth["severity"],
             "sla": record.sla_response_hours, "expected_sla": truth["sla_response_hours"],
             "action": record.next_action, "expected_action": truth["next_action"],
-            "tier": record.routing.tier, "cost_usd": record.cost_usd, "score": score,
+            "tier": record.routing.tier, "models": record.models,
+            "cost_usd": record.cost_usd, "score": score,
             "notes": record.notes, "proposals": len(record.proposals),
         })
 
     n = len(rows)
     payload = {"cases": n, "tier": args.tier or "routed", "totals": totals,
                "accuracy": {a: (totals[a] / n if n else 0) for a in AXES},
-               "cost_usd": round(spend, 6), "tiers": tiers, "rows": rows}
+               "cost_usd": round(spend, 6), "tiers": tiers, "rows": rows,
+               "provenance": provenance.snapshot(PROMPT_SHA256)}
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

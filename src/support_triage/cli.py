@@ -25,6 +25,8 @@ def render(record: TriageRecord) -> str:
         f"  next action      {record.next_action}",
         f"  cites            {', '.join(record.citations)}",
         f"  routed to        {record.routing.tier} model — {record.routing.reasons[0]}",
+        f"  models           {', '.join(record.models) or 'unknown'}",
+        f"  provenance       corpus {record.corpus_sha256[:12]} · prompt {record.prompt_sha256[:12]}",
         f"  cost             ${record.cost_usd:.6f} · {record.model_calls} call(s) · "
         f"{record.input_tokens} in / {record.output_tokens} out",
     ]

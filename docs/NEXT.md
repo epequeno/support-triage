@@ -32,7 +32,7 @@ epistemics-heavy habit was explicitly set aside.)
 | `eval.py` | `just eval` — all ten cases scored against held-out truth, with cost. |
 | `web.py` | The thin web UI (M3, 2026-10-12): one page, no framework. The approve endpoint executes the server's own record — a browser cannot invent a state change. |
 | `traces.py` | OTEL traces (M4, 2026-10-12): every triage flushes a span tree to `results/traces/` — nodes, model calls with tier/tokens, repairs, durations. Real OTel api+sdk, no collector. |
-| tests | 27 offline tests, fake model, no key, no spend. |
+| tests | 41 offline tests, fake model, no key, no spend. |
 
 ## The routing experiment: measured (2026-10-12)
 
@@ -150,7 +150,7 @@ the routed run at ~$0.30/ten cases is the operating cost of the current configur
 ```bash
 cd ~/code/support-triage
 just sync && just seed        # if supportorg.db is missing (it is gitignored)
-just test                     # 40 offline tests, no key needed
+just test                     # 41 offline tests, no key needed
 just eval-gate                # judge results/eval.json against results/baseline.json (no spend)
 just triage CASE-1047         # a declared-Severity-1 case on a non-production workload
 just eval                     # the ten-case table, live, real spend (~$0.30)
@@ -190,7 +190,7 @@ and gap #2 (CI + an eval gate) is closed by the same day's second commit. See
 the repo at that time.
 
 **CI and the eval gate, measured (2026-11-03).** A GitHub Actions workflow ran the offline suite on
-every push and pull request — `uv sync --frozen`, `uv run pytest -q`, 40 tests, no key and no
+every push and pull request — `uv sync --frozen`, `uv run pytest -q`, 41 tests, no key and no
 network — plus an `eval` job on manual dispatch that seeded the org, spent one real routed run and
 gated it. **That workflow is now disabled at the owner's request:** it was moved verbatim to
 `ci/github-actions-test.yml` (outside `.github/workflows/`, so GitHub never reads it) and is kept as
@@ -208,13 +208,13 @@ environment and to refuse to start without `OPENROUTER_API_KEY`; nothing is wire
 gate is run by hand.
 
 **The review, re-scored (2026-11-03).** The five-vector change matrix and the twelve dimensions
-were re-scored after the work above: **11 of 12 at L2**, with the only L1 left being identity and
-provenance — `results/eval.json` records the tier but not the model, and no run records the corpus
-digest, so a run is not reproducible from the repo. The rubric's bar needs L2 on dimension 1, so the
-verdict is unchanged in words and much changed in size: "not production ready" by one two-hour
-dimension rather than by six. §8 of `notes/2026-11-03-production-readiness-support-triage.md` holds
-the table; the review's own §4 findings are closed except "nothing would page anyone", which is now
-a runbook with no alarm behind it.
+were re-scored after the work above: **12 of 12 at L2**. Identity and provenance moved last: every
+record, trace root and eval payload now carries the model ids, the `corpus/policy.md` SHA-256 and
+the classify-prompt SHA-256; `results/eval.manifest.json` backfills the recorded 2026-10-12 run
+from the commit that produced it. The rubric's bar is met. §8 of
+`notes/2026-11-03-production-readiness-support-triage.md` holds the table; the review's own §4
+findings are closed except "nothing would page anyone", which is now a runbook with no alarm behind
+it.
 
 **The deployed shape, verified for real (2026-11-03).** Deployed with the auth and S3 changes
 (`cdk deploy`, 167 s): the task reported HEALTHY — which is itself the proof that the token reached
