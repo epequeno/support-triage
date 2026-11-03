@@ -1,0 +1,66 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    name: offline suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      # The suite injects a fake model: no API key, no network, no spend.
+      - run: uv run pytest -q
+
+  eval:
+    name: eval gate (real spend)
+    # Manual dispatch only: one ten-case run spends about $0.30 of real API credit. Add required
+    # reviewers or a budget limit to the `eval` environment in repo settings if the repo is
+    # shared — the environment is what turns this from a button into an approval.
+    if: github.event_name == 'workflow_dispatch'
+    needs: offline
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: eval
+    concurrency:
+      group: eval-run
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: require the API key
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          if [ -z "$OPENROUTER_API_KEY" ]; then
+            echo "::error::OPENROUTER_API_KEY is not set; the eval spends real credit and will not run blind"
+            exit 1
+          fi
+      - name: seed the mock support org
+        run: uv run python -m support_triage.seed
+      - name: eval
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: uv run python -m support_triage.eval
+      - name: gate the run against the recorded baseline
+        run: uv run python -m support_triage.eval_gate results/eval.json
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: eval-run
+          path: results/eval.json
+          if-no-files-found: warn

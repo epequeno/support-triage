@@ -1,0 +1,19 @@
+{
+  "recorded": "2026-10-12",
+  "note": "The floors a routed eval run may not fall below. Derived from four post-fix routed runs, forty case-draws: severity 40/40, the other four axes 39/40 each (one miss, the same CASE-1046 POL-SCOPE-1 wording ambiguity). Floors are rates snapped up to whole cases at the size of the run, so one axis point of model noise does not fail a build. The cost ceiling is the recorded $0.289-$0.303 band plus headroom; it catches the router silently degrading to strong everywhere (forced strong measured $0.51 on the same ten cases).",
+  "cases": 10,
+  "floors": {
+    "severity": 1.0,
+    "in_scope": 0.9,
+    "sla": 0.9,
+    "action": 0.9,
+    "citations": 0.9
+  },
+  "cost_ceiling_usd": 0.36,
+  "reference_runs": [
+    "results/eval.json",
+    "results/eval-dist-1.json",
+    "results/eval-dist-2.json",
+    "results/eval-dist-3.json"
+  ]
+}

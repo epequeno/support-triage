@@ -16,6 +16,9 @@ triage case="CASE-1041":
 eval *ARGS:
     @uv run python -m support_triage.eval {{ARGS}}
 
+eval-gate file="results/eval.json":
+    @uv run python -m support_triage.eval_gate "{{file}}"
+
 test:
     @uv run pytest -q
 

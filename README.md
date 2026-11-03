@@ -21,6 +21,7 @@ just triage CASE-1047 --tier strong
 just triage CASE-1047 --approve-as your-name   # the human half of the approval gate
 APP_TOKEN=dev just web          # the thin web UI; enter "dev" in the token bar
 just test                       # offline and deterministic; no API key needed
+just eval-gate                  # judge results/eval.json against results/baseline.json; no spend
 uv run python -m support_triage.costs          # what the last runs cost, by tier
 ```
 
@@ -68,7 +69,7 @@ case text ─▶ gather ─▶ route ─▶ retrieve ─▶ classify ─▶ draf
 ## Where this stands, and what is next
 
 [`HANDOFF.md`](HANDOFF.md) is the current handoff — what changed on 2026-11-03, what is
-uncommitted, what is verified, and the ranked next steps. [`docs/NEXT.md`](docs/NEXT.md) is the
+verified, and the ranked next steps. [`docs/NEXT.md`](docs/NEXT.md) is the
 build history: what is built, the measured numbers with their caveats, what the routing experiment
 showed, and how to pick the work back up.
 
@@ -77,8 +78,8 @@ showed, and how to pick the work back up.
 **M0 done, the eval (M5) runs, routing is measured, the web UI (M3), OTEL traces (M4) and the
 AWS deploy (M6) are built.** Built: the mock support org, the citable policy corpus, the
 LangGraph graph, model routing, the approval gate, cost accounting with a per-case cap, the
-CLI, the thin web UI (`just web`), span-tree traces on every run, 27 offline tests, and
-`just eval` over all ten cases with held-out truth.
+CLI, the thin web UI (`just web`), span-tree traces on every run, 36 offline tests in CI, and
+`just eval` over all ten cases with held-out truth, gated against a recorded baseline.
 
 The routing experiment (real API, all ten cases, 2026-10-12). "Pre-fix" rows ran before the
 retrieval fix below; "post-fix" rows after:
@@ -107,6 +108,26 @@ gathered facts support it, after a model citing the incident override on an unre
 right 12h "corrected" into a wrong 1h. Security cases have a defined severity (`POL-SEC-1`:
 Sev2), and the repair path survives an exception raised bare (an empty `args` tuple used to crash
 the repair itself, mid-eval).
+
+## CI and the eval gate
+
+`.github/workflows/test.yml` runs the offline suite on every push and pull request — `uv sync
+--frozen`, then `uv run pytest -q`, 36 tests, no API key and no network — and a separate
+`eval gate (real spend)` job that only runs on manual dispatch: it seeds the org, spends one real
+routed eval run (~$0.30), and judges the result.
+
+The judgment is `python -m support_triage.eval_gate` (`just eval-gate`) against
+`results/baseline.json`, which records the floors from the four committed routed runs: severity
+1.0 (it was perfect in all forty case-draws) and in scope, sla, action, citations 0.9 each. Floors
+are rates snapped up to whole cases, so the known `CASE-1046` wobble passes a build and a second
+miss does not. The baseline also carries a **$0.36 cost ceiling**, because the other way a run can
+regress is silently: a router that stops routing is more accurate and much more expensive (forced
+strong measured $0.51 against $0.30 routed). A failure prints the axis, the case, and what the
+floor was; the exit status is the check.
+
+The eval job needs the repository secret `OPENROUTER_API_KEY` and checks for it before spending.
+It runs in the `eval` environment — add required reviewers or a spending limit there if the repo
+is shared.
 
 ## The deploy (M6), for the record
 
