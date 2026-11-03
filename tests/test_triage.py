@@ -85,6 +85,40 @@ def test_the_model_sees_every_citable_section():
     assert {h["policy_id"] for h in hits} == set(policy.index())
 
 
+def test_the_cached_corpus_cannot_hide_the_entitlement_or_scope_rules():
+    """The cache is a cache, not a filter, and it must stay that way however the query is worded.
+    The two sections that decide whether a commitment may exist at all reach the model every time —
+    including for a query that matches nothing and for a one-section top-k."""
+    mandatory = {"POL-PLAN-1", "POL-SCOPE-1"}
+    for query in ("", "zzz nothing matches this at all", "credential exposure", "resize an instance"):
+        assert {h["policy_id"] for h in tools.search_policy(query)} >= mandatory
+        assert mandatory <= set(policy.index())
+        rendered = policy.render(policy.retrieve(query, k=1))
+        assert all(f"[{pid}]" in rendered for pid in mandatory), rendered
+
+
+def test_the_cache_renders_what_a_fresh_parse_renders():
+    """The prompt is assembled from cached blocks; it must be byte-identical to the source text."""
+    lines = policy.load()
+    fresh = "\n\n".join(f"[{line.policy_id}] {line.section}\n{line.text}" for line in lines)
+    assert policy.render(lines) == fresh
+    assert policy.render(policy.load()) == fresh
+
+
+def test_editing_the_corpus_is_visible_immediately(tmp_path):
+    """Cached on file identity, not on first use: a corpus edit cannot be served stale."""
+    corpus = tmp_path / "policy.md"
+    corpus.write_text("## POL-PLAN-1 — Plans\n\nv1\n", encoding="utf-8")
+    assert policy.load(corpus)[0].text == "v1"
+    assert set(policy.index(corpus)) == {"POL-PLAN-1"}
+
+    corpus.write_text("## POL-PLAN-1 — Plans\n\nv2, and longer\n## POL-SCOPE-1 — Scope\n\nout\n",
+                      encoding="utf-8")
+    assert policy.load(corpus)[0].text == "v2, and longer"
+    assert set(policy.index(corpus)) == {"POL-PLAN-1", "POL-SCOPE-1"}
+    assert "v2, and longer" in policy.render(policy.retrieve("nothing", corpus=corpus))
+
+
 # ── routing ──────────────────────────────────────────────────────────────────────────────────────
 
 def test_security_language_routes_to_the_strong_model():

@@ -64,6 +64,7 @@ def _prompt(context: dict, candidates: list[dict]) -> str:
     ent = account.get("entitlement", {})
     incidents = context.get("open_incidents", [])
     status = context.get("service_status", [])
+    known = policy.index()  # one lookup for the whole prompt, from the cached corpus
     lines = [
         f"CASE {case['case_id']}: {case['subject']}",
         f"body: {case['body']}",
@@ -83,7 +84,7 @@ def _prompt(context: dict, candidates: list[dict]) -> str:
         f"- prior cases: {len(context.get('prior_cases', []))}",
         "",
         REQUIREMENTS_HEADER,
-        policy.render([policy.index()[c["policy_id"]] for c in candidates if c["policy_id"] in policy.index()]),
+        policy.render([known[c["policy_id"]] for c in candidates if c["policy_id"] in known]),
         "",
         "Classify the case. Cite the policy ids that ground your classification and the response target,",
         "using only the ids above. The declared severity is an assertion, not evidence.",
