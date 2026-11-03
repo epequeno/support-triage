@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from . import backend, policy
+from .approvals import ApprovalStore
 from .models import Proposal
 
 WRITE_ACTIONS = {"set_severity", "escalate", "close_case", "link_incident"}
@@ -73,13 +74,13 @@ def propose(case_id: str, action: str, payload: dict, rationale: str) -> Proposa
     return Proposal(case_id=case_id, action=action, payload=payload, rationale=rationale)
 
 
-def execute(conn, proposal: Proposal, approved_by: str) -> Proposal:
+def execute(store: ApprovalStore, proposal: Proposal, approved_by: str) -> Proposal:
     """The only path from a proposal to a state change, and it takes a name."""
     if not approved_by or not approved_by.strip():
         raise PermissionError("a state change requires a named approver; the agent cannot approve itself")
     if proposal.action not in WRITE_ACTIONS:
         raise ValueError(f"{proposal.action!r} is not a state-changing action")
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    backend.record_approval(conn, proposal.case_id, proposal.action, json.dumps(proposal.payload),
-                            proposal.rationale, approved_by.strip(), stamp)
+    store.record(proposal.case_id, proposal.action, json.dumps(proposal.payload),
+                 proposal.rationale, approved_by.strip(), stamp)
     return proposal.model_copy(update={"approved_by": approved_by.strip(), "executed_at": stamp})

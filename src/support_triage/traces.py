@@ -1,9 +1,14 @@
 """OTEL traces (M4): a triage read as a span tree, not a wall of text.
 
-Real OpenTelemetry API and SDK — not a lookalike — but deliberately no collector and no network
-exporter. Every root span (one triage) flushes to `results/traces/<case>-<stamp>.json` as a nested
-tree: which nodes ran, how long each took, which model calls cost what, and what the verdict was.
-That file is the artifact; it goes in the repo's ignored results, not git.
+Real OpenTelemetry API and SDK. Every root span (one triage) flushes to
+`results/traces/<case>-<stamp>.json` as a nested tree: which nodes ran, how long each took, which
+model calls cost what, and what the verdict was. That file is the artifact; it goes in the repo's
+ignored results, not git.
+
+When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the same spans also go over OTLP to the shared collector
+(`~/code/observability-stack`), which forwards them to Phoenix for browsing. The file stays: the
+tree is the committed evidence, the UI is for looking at one trace properly. Set the base URL
+(`http://localhost:4318`) or the full traces path; both work.
 
 Spans are buffered per trace and written when the root ends, because SimpleSpanProcessor hands them
 over one at a time and a trace is only legible as a whole.
@@ -11,8 +16,10 @@ over one at a time and a trace is only legible as a whole.
 
 from __future__ import annotations
 
+import atexit
 import functools
 import json
+import os
 import threading
 from pathlib import Path
 
@@ -22,10 +29,17 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
 
 TRACES = Path(__file__).resolve().parents[2] / "results" / "traces"
+SERVICE = "support-triage"
 
 _ready = False
 _lock = threading.Lock()
 _last_path: Path | None = None
+
+
+def _traces_url(base: str) -> str:
+    """Accept the OTLP base URL or the full path; the HTTP exporter wants the path."""
+    base = base.rstrip("/")
+    return base if base.endswith("/v1/traces") else f"{base}/v1/traces"
 
 
 def setup() -> None:
@@ -34,8 +48,24 @@ def setup() -> None:
     with _lock:
         if _ready:
             return
-        provider = TracerProvider(resource=Resource.create({"service.name": "support-triage"}))
+        provider = TracerProvider(resource=Resource.create({
+            "service.name": SERVICE,
+            # How Phoenix groups traces into a project. Over gRPC this attribute is the only
+            # mechanism; the x-project-name header is HTTP-only.
+            "openinference.project.name": SERVICE,
+        }))
         provider.add_span_processor(SimpleSpanProcessor(_TreeExporter(TRACES)))
+        endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "").strip()
+        if endpoint:
+            from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+            from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+            provider.add_span_processor(
+                BatchSpanProcessor(OTLPSpanExporter(endpoint=_traces_url(endpoint)))
+            )
+            # A batch processor holds spans until its queue drains; without this, a short CLI run
+            # exits with the spans still in memory and the UI shows nothing.
+            atexit.register(provider.shutdown)
         trace.set_tracer_provider(provider)
         _ready = True
 

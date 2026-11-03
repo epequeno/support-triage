@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from support_triage import backend, costs, policy, router, seed, tools, traces
+from support_triage import approvals, backend, costs, policy, router, seed, tools, traces
 from support_triage.agent import CitationError, TriageAgent
 from support_triage.models import Classification, Severity
 
@@ -289,11 +289,12 @@ def test_a_repair_is_a_span_of_its_own(conn):
 # ── the gate, and the meter ──────────────────────────────────────────────────────────────────────
 
 def test_state_changes_require_a_named_human(conn):
+    store = approvals.SqliteApprovalStore(conn)
     proposal = tools.propose("CASE-1041", "escalate", {"team": "on-call"}, "policy says so")
     with pytest.raises(PermissionError):
-        tools.execute(conn, proposal, "")
-    tools.execute(conn, proposal, "R. Alvarez")
-    rows = backend.approvals(conn, "CASE-1041")
+        tools.execute(store, proposal, "")
+    tools.execute(store, proposal, "R. Alvarez")
+    rows = store.list("CASE-1041")
     assert len(rows) == 1 and rows[0]["approved_by"] == "R. Alvarez"
 
 

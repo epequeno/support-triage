@@ -3,9 +3,8 @@
 Deliberately minimal, per docs/NEXT.md: container, one VPC, the app behind it,
 deploy once for real, torn down after the screenshot. No ALB (the task's public
 IP is the URL), no NAT (the public subnet reaches OpenRouter through the
-internet gateway), no secrets plumbing (the torn-down-in-an-hour task
-definition carries the API key as a plain environment variable — see the
-caveat in the commit).
+internet gateway). The app token comes from Secrets Manager; the OpenRouter key
+still rides as a plain environment variable — see the caveat in the README.
 """
 
 from __future__ import annotations
@@ -14,11 +13,14 @@ import os
 
 from aws_cdk import (
     Duration,
+    RemovalPolicy,
     Stack,
     aws_ec2 as ec2,
     aws_ecs as ecs,
     aws_ecr_assets as ecr_assets,
     aws_logs as logs,
+    aws_s3 as s3,
+    aws_secretsmanager as secretsmanager,
 )
 from constructs import Construct
 
@@ -50,6 +52,29 @@ class SupportTriageStack(Stack):
 
         cluster = ecs.Cluster(self, "cluster", vpc=vpc)
 
+        # The app token is a generated secret, injected into the container as APP_TOKEN. Unlike
+        # the OpenRouter key it does not ride as a plain environment variable.
+        app_token = secretsmanager.Secret(
+            self,
+            "app-token",
+            secret_name="support-triage/app-token",
+            generate_secret_string=secretsmanager.SecretStringGenerator(
+                exclude_punctuation=True, password_length=32
+            ),
+        )
+
+        # The approvals audit trail must outlive the task. One immutable object per approval;
+        # the app selects S3 when APPROVALS_BUCKET is set. Destroyed with the stack, which is the
+        # same deliberate trade as the rest of the deploy.
+        approvals = s3.Bucket(
+            self,
+            "approvals",
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+        )
+
         # CDK builds the Dockerfile at the repo root and pushes it to ECR.
         # Platform pinned: the local Docker builds arm64 (Apple Silicon), Fargate
         # runs x86_64 — without this the tasks crash with `exec format error`
@@ -64,11 +89,20 @@ class SupportTriageStack(Stack):
         task = ecs.FargateTaskDefinition(
             self, "task", cpu=256, memory_limit_mib=512
         )
+        # Read + put, not read-write: the app never needs to delete an audit object.
+        approvals.grant_read(task.task_role)
+        approvals.grant_put(task.task_role)
+        app_token.grant_read(task.obtain_execution_role())
 
         task.add_container(
             "app",
             image=ecs.ContainerImage.from_docker_image_asset(image),
-            environment={"OPENROUTER_API_KEY": api_key},
+            environment={
+                "OPENROUTER_API_KEY": api_key,
+                "APPROVALS_BUCKET": approvals.bucket_name,
+                "AWS_REGION": self.region,
+            },
+            secrets={"APP_TOKEN": ecs.Secret.from_secrets_manager(app_token)},
             logging=ecs.AwsLogDriver(
                 stream_prefix="triage",
                 log_group=logs.LogGroup(
@@ -80,8 +114,10 @@ class SupportTriageStack(Stack):
             health_check=ecs.HealthCheck(
                 command=[
                     "CMD-SHELL",
-                    "python -c \"import urllib.request as u; u.urlopen("
-                    "'http://localhost:8000/api/cases', timeout=5)\" || exit 1",
+                    "python -c \"import os,urllib.request as u;"
+                    " r=u.Request('http://localhost:8000/api/cases',"
+                    " headers={'Authorization':'Bearer '+os.environ['APP_TOKEN']});"
+                    " u.urlopen(r, timeout=5)\" || exit 1",
                 ],
                 interval=Duration.seconds(30),
                 timeout=Duration.seconds(10),
@@ -106,4 +142,6 @@ class SupportTriageStack(Stack):
             assign_public_ip=True,
             security_groups=[sg],
             desired_count=1,
+            # A failed task start should fail the deployment, not wait out the default window.
+            circuit_breaker=ecs.DeploymentCircuitBreaker(rollback=True),
         )

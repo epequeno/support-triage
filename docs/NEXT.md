@@ -6,6 +6,9 @@ the bug behind the one case every tier was failing: the retriever was hiding the
 the model. The routed eval is now a perfect 50/50. This project is **mid-build and runs**. Read
 this before touching anything.
 
+**Current handoff:** [`HANDOFF.md`](../HANDOFF.md) carries the 2026-11-03 state and the ranked next
+steps; this file remains the build history and measured results.
+
 ## Where it stands
 
 **Goal, restated:** demonstrate applied AI engineering — a running system with a GenAI model doing
@@ -29,7 +32,7 @@ epistemics-heavy habit was explicitly set aside.)
 | `eval.py` | `just eval` — all ten cases scored against held-out truth, with cost. |
 | `web.py` | The thin web UI (M3, 2026-10-12): one page, no framework. The approve endpoint executes the server's own record — a browser cannot invent a state change. |
 | `traces.py` | OTEL traces (M4, 2026-10-12): every triage flushes a span tree to `results/traces/` — nodes, model calls with tier/tokens, repairs, durations. Real OTel api+sdk, no collector. |
-| tests | 23 offline tests, fake model, no key, no spend. |
+| tests | 27 offline tests, fake model, no key, no spend. |
 
 ## The routing experiment: measured (2026-10-12)
 
@@ -178,4 +181,8 @@ perfect-case-in-every-run claim, which is not a claim worth making.
 **M7: done (2026-10-12).** The repo is **public** at `epequeno/support-triage` — pre-publish audit
 clean (no secrets, no absolute paths, no identity strings beyond the MIT LICENSE name, no large
 files), README carries the deploy story with the API-key caveat spelled out so nobody copies the
-task-definition shortcut, MIT license added. Nothing is left in flight in this repo.
+task-definition shortcut, MIT license added. Nothing was left in flight at M7.
+
+**2026-11-03 update:** readiness gap #1 (caller auth + durable approvals) is implemented in the
+working tree but uncommitted; see [`HANDOFF.md`](../HANDOFF.md). The M7 sentence above described the
+repo at that time.

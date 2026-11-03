@@ -19,13 +19,15 @@ just sync && just seed          # uv sync, then seed the mock support org (SQLit
 just triage CASE-1041           # one case, end to end, with the full record
 just triage CASE-1047 --tier strong
 just triage CASE-1047 --approve-as your-name   # the human half of the approval gate
-just web                        # the thin web UI: triage a case, approve a proposal, see the trail
+APP_TOKEN=dev just web          # the thin web UI; enter "dev" in the token bar
 just test                       # offline and deterministic; no API key needed
 uv run python -m support_triage.costs          # what the last runs cost, by tier
 ```
 
-`OPENROUTER_API_KEY` is needed only for real triage runs. The tests inject a fake model, so they are
-free and reproducible.
+`OPENROUTER_API_KEY` is needed only for real triage runs. `APP_TOKEN` is needed for the web API —
+without it every `/api` request fails closed with 503. The tests inject a fake model and set their
+own token, so they are free and reproducible. Approvals go to SQLite locally, or to S3 when
+`APPROVALS_BUCKET` is set.
 
 ## How it is put together
 
@@ -47,7 +49,9 @@ case text ─▶ gather ─▶ route ─▶ retrieve ─▶ classify ─▶ draf
 | `src/support_triage/router.py` | Model routing: cheap by default, escalate on signal, with the reasons recorded per case. |
 | `src/support_triage/tools.py` | Reads are ordinary functions. **Writes return a proposal**; `execute()` needs a named approver. |
 | `src/support_triage/costs.py` | Token and dollar accounting, and a per-case cap that stops a run rather than overspending it. |
-| `src/support_triage/web.py` | The thin web UI (M3): one page, no framework. Triage a case, see the record, approve a proposal by name — the approve endpoint executes a proposal out of the server's own record, so a browser can never invent a state change. |
+| `src/support_triage/web.py` | The thin web UI (M3): one page, no framework. Every `/api` route requires the shared bearer token from `APP_TOKEN`; the page prompts for it. Triage a case, see the record, approve a proposal by name — the approve endpoint executes a proposal out of the server's own record, so a browser can never invent a state change. |
+| `src/support_triage/auth.py` | The caller gate: a constant-time bearer-token check, fail-closed when `APP_TOKEN` is unset. |
+| `src/support_triage/approvals.py` | The audit trail: SQLite locally, one immutable JSON object per approval in S3 when `APPROVALS_BUCKET` is set. |
 | `src/support_triage/traces.py` | OTEL traces (M4): every triage flushes a span tree to `results/traces/<case>-<stamp>.json` — nodes, both model calls (with tier and tokens), repairs, and durations. Real opentelemetry-api/sdk, no collector. |
 
 ## The cases worth looking at
@@ -63,15 +67,17 @@ case text ─▶ gather ─▶ route ─▶ retrieve ─▶ classify ─▶ draf
 
 ## Where this stands, and what is next
 
-[`docs/NEXT.md`](docs/NEXT.md) is the handoff: what is built, the measured numbers with their
-caveats, what the routing experiment showed, and how to pick the work back up.
+[`HANDOFF.md`](HANDOFF.md) is the current handoff — what changed on 2026-11-03, what is
+uncommitted, what is verified, and the ranked next steps. [`docs/NEXT.md`](docs/NEXT.md) is the
+build history: what is built, the measured numbers with their caveats, what the routing experiment
+showed, and how to pick the work back up.
 
 ## Status
 
 **M0 done, the eval (M5) runs, routing is measured, the web UI (M3), OTEL traces (M4) and the
 AWS deploy (M6) are built.** Built: the mock support org, the citable policy corpus, the
 LangGraph graph, model routing, the approval gate, cost accounting with a per-case cap, the
-CLI, the thin web UI (`just web`), span-tree traces on every run, 24 offline tests, and
+CLI, the thin web UI (`just web`), span-tree traces on every run, 27 offline tests, and
 `just eval` over all ten cases with held-out truth.
 
 The routing experiment (real API, all ten cases, 2026-10-12). "Pre-fix" rows ran before the
@@ -118,11 +124,25 @@ Two things the deploy found that nothing local could: the ledger table existed o
 first write (a freshly seeded container 500'd `/api/ledger`), and an Apple-Silicon Docker build
 crashed Fargate with `exec format error` (the asset now pins `LINUX_AMD64`).
 
-**One caveat worth copying correctly:** the demo stack passes the OpenRouter key as a plain
-task-definition environment variable. That is acceptable only for a stack that is torn down
-within the hour, and it is spelled out so nobody ships that shortcut. For anything that outlives
-a screenshot: SSM Parameter Store or Secrets Manager, not the task definition.
+**Gap closed 2026-11-03: caller auth and a durable audit trail.** The first deploy had no caller
+authentication — anyone reaching the task's public IP could triage and approve — and its approvals
+table lived on the container's filesystem, so the trail died with the task. Every `/api` route now
+requires a bearer token from the Secrets Manager secret `support-triage/app-token`, and approvals
+are written to an S3 bucket when `APPROVALS_BUCKET` is set. The token does not ride as a plain
+environment variable. The audit trail survives a task restart; the bucket is destroyed with the
+stack. Retrieve the token after deploy with:
+
+```bash
+aws secretsmanager get-secret-value --secret-id support-triage/app-token \
+  --query SecretString --output text
+```
+
+**One caveat worth copying correctly:** the demo stack still passes the OpenRouter key as a plain
+task-definition environment variable. The app token does not — it comes from Secrets Manager. The
+key shortcut is acceptable only for a stack that is torn down within the hour, and it is spelled
+out so nobody ships it. For anything that outlives a screenshot: SSM Parameter Store or Secrets
+Manager, not the task definition.
 
 **Not built yet:** a wider case set.
 
-**Deliberately not built:** MCP, authentication, multi-tenancy, anything persistent, fine-tuning.
+**Deliberately not built:** MCP, multi-tenancy, fine-tuning; the triage records themselves are still in memory.

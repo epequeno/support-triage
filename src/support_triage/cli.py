@@ -11,7 +11,7 @@ import argparse
 import json
 import sys
 
-from . import backend, tools, traces
+from . import approvals, backend, tools, traces
 from .models import TriageRecord
 
 
@@ -73,10 +73,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"trace: {trace_path}")
 
     if args.approve_as:
+        store = approvals.store_for(conn)
         for proposal in record.proposals:
-            tools.execute(conn, proposal, args.approve_as)
+            tools.execute(store, proposal, args.approve_as)
         print(f"\napproved {len(record.proposals)} state change(s) as {args.approve_as}")
-        for row in backend.approvals(conn, record.case_id):
+        for row in store.list(record.case_id):
             print(f"  {row['action']} {row['payload']} by {row['approved_by']} at {row['executed_at']}")
     elif record.proposals:
         print(f"\n{len(record.proposals)} proposal(s) awaiting approval — rerun with "

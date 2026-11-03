@@ -2,22 +2,29 @@
 minutes — a case in, a grounded record out, and the one screen where a human approves a state
 change by name.
 
-Nothing here is persistent across restarts: the last triage record per case lives in memory, and
-the only durable state is the approvals table, written by `tools.execute` exactly as the CLI
-writes it. The approval endpoint takes an index into the *server's* record, not a client-supplied
-payload — the browser never gets to invent a state change.
+Nothing here is persistent across restarts: the last triage record per case lives in memory. The
+approvals trail is the only durable state — SQLite locally, S3 in the deployed shape when
+`APPROVALS_BUCKET` is set — written by `tools.execute` exactly as the CLI writes it. Every `/api`
+route requires the shared bearer token from `APP_TOKEN`; with it unset the API fails closed. The
+approval endpoint takes an index into the *server's* record, not a client-supplied payload — the
+browser never gets to invent a state change.
 """
 
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from . import backend, costs, tools
+from . import approvals, backend, costs, tools
+from .auth import require_token
 from .models import TriageRecord
 
 app = FastAPI(title="support-triage")
+
+# Every /api route requires the shared bearer token. The page itself stays open: it carries no
+# data until the token is supplied. With APP_TOKEN unset the API fails closed with 503.
+api = APIRouter(prefix="/api", dependencies=[Depends(require_token)])
 
 # SQLite connections are thread-bound and FastAPI runs sync endpoints in a threadpool, so each
 # request opens its own connection — connecting to a local SQLite file costs microseconds, and a
@@ -38,7 +45,7 @@ def index() -> str:
     return PAGE
 
 
-@app.get("/api/cases")
+@api.get("/cases")
 def cases() -> list[dict]:
     conn = backend.connect()
     rows = []
@@ -50,7 +57,7 @@ def cases() -> list[dict]:
     return rows
 
 
-@app.get("/api/ledger")
+@api.get("/ledger")
 def ledger() -> dict:
     conn = backend.connect()
     costs.ensure_cost_log(conn)
@@ -61,7 +68,7 @@ def ledger() -> dict:
             "total_usd": round(sum(r[4] or 0 for r in rows), 4)}
 
 
-@app.post("/api/triage/{case_id}", response_model=TriageRecord)
+@api.post("/triage/{case_id}", response_model=TriageRecord)
 def triage(case_id: str) -> TriageRecord:
     from .agent import build_agent  # late, so the app serves without an API key
     try:
@@ -72,22 +79,26 @@ def triage(case_id: str) -> TriageRecord:
     return record
 
 
-@app.post("/api/approve")
+@api.post("/approve")
 def approve(body: ApprovalRequest) -> dict:
     record = _records.get(body.case_id)
     if record is None or not 0 <= body.index < len(record.proposals):
         raise HTTPException(status_code=404, detail="no such proposal — triage the case first")
     try:
         conn = backend.connect()
-        executed = tools.execute(conn, record.proposals[body.index], body.approved_by)
+        store = approvals.store_for(conn)
+        executed = tools.execute(store, record.proposals[body.index], body.approved_by)
     except PermissionError as exc:  # the empty-name case: the gate, doing its job
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"executed": executed.model_dump(), "trail": backend.approvals(conn, body.case_id)}
+    return {"executed": executed.model_dump(), "trail": store.list(body.case_id)}
 
 
-@app.get("/api/approvals/{case_id}")
-def approvals(case_id: str) -> list[dict]:
-    return backend.approvals(backend.connect(), case_id)
+@api.get("/approvals/{case_id}")
+def approval_trail(case_id: str) -> list[dict]:
+    return approvals.store_for(backend.connect()).list(case_id)
+
+
+app.include_router(api)
 
 
 PAGE = """<!doctype html>
@@ -116,11 +127,20 @@ PAGE = """<!doctype html>
   input { padding: .2rem .4rem; }
   .err { color: #a00; margin: .5rem 0; }
   .ok { color: #060; }
+  .tokenbar { display: flex; gap: .5rem; align-items: center; margin: .5rem 0 1rem; }
+  .tokenbar input { padding: .25rem .4rem; }
 </style></head><body>
 <h1>support-triage</h1>
 <p class="sub">A case in plain language in, a grounded triage record out. A commitment may only be
 made if the policy and the entitlement support it — and no state change happens without a named
 human. <span id="ledger"></span></p>
+
+<div id="tokenbar" class="tokenbar">
+  <label for="token">access token</label>
+  <input id="token" type="password" size="28" placeholder="APP_TOKEN">
+  <button onclick="saveToken()">use</button>
+  <span id="tokenerr" class="err"></span>
+</div>
 
 <table id="cases"><thead><tr>
   <th>case</th><th>subject</th><th>account</th><th>plan</th><th></th>
@@ -133,8 +153,34 @@ human. <span id="ledger"></span></p>
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
+let token = sessionStorage.getItem('app_token') || '';
+const authHeaders = () => token ? {'Authorization': 'Bearer ' + token} : {};
+async function api(path, opts = {}) {
+  const res = await fetch(path, {...opts, headers: {...(opts.headers || {}), ...authHeaders()}});
+  if (res.status === 401 || res.status === 503) {
+    const body = await res.json().catch(() => ({}));
+    showTokenBar(body.detail || 'access token required');
+    throw new Error(body.detail || 'access token required');
+  }
+  return res;
+}
+function showTokenBar(message) {
+  $('#tokenbar').style.display = 'flex';
+  if (message) $('#tokenerr').textContent = message;
+}
+function saveToken() {
+  const value = $('#token').value.trim();
+  if (!value) { showTokenBar('enter a token'); return; }
+  token = value;
+  sessionStorage.setItem('app_token', value);
+  $('#tokenbar').style.display = 'none';
+  $('#tokenerr').textContent = '';
+  loadCases().catch((e) => { $('#error').textContent = e.message; });
+  loadLedger().catch(() => {});
+}
+
 async function loadCases() {
-  const rows = await (await fetch('/api/cases')).json();
+  const rows = await (await api('/api/cases')).json();
   $('#cases tbody').innerHTML = rows.map((c) => `
     <tr><td><code>${esc(c.case_id)}</code></td><td>${esc(c.subject)}</td>
     <td>${esc(c.account)}</td><td>${esc(c.plan)}</td>
@@ -142,13 +188,13 @@ async function loadCases() {
 }
 
 async function loadLedger() {
-  const l = await (await fetch('/api/ledger')).json();
+  const l = await (await api('/api/ledger')).json();
   $('#ledger').textContent = l.total_usd > 0
     ? `Model spend to date: $${l.total_usd.toFixed(4)}.` : '';
 }
 
 async function loadTrail(caseId) {
-  const rows = await (await fetch('/api/approvals/' + caseId)).json();
+  const rows = await (await api('/api/approvals/' + caseId)).json();
   return rows.length
     ? `<div class="panel"><h3>approved state changes (the audit trail)</h3>` +
       rows.map((r) => `<div><code>${esc(r.action)}</code> ${esc(r.payload)} —
@@ -159,7 +205,7 @@ async function loadTrail(caseId) {
 async function triage(caseId) {
   $('#error').textContent = ''; $('#record').textContent = 'triaging ' + caseId + ' (real model, real spend)…';
   try {
-    const r = await (await fetch('/api/triage/' + caseId, {method: 'POST'})).json();
+    const r = await (await api('/api/triage/' + caseId, {method: 'POST'})).json();
     if (!r.case_id) throw new Error(r.detail || 'triage failed');
     render(r);
   } catch (e) { $('#record').textContent = ''; $('#error').textContent = e.message; }
@@ -204,7 +250,7 @@ function render(r) {
 async function approve(caseId, index) {
   const name = $('#approver-' + index).value;
   try {
-    const res = await fetch('/api/approve', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    const res = await api('/api/approve', {method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({case_id: caseId, index: index, approved_by: name})});
     const out = await res.json();
     if (!res.ok) throw new Error(out.detail || 'approval failed');
@@ -215,7 +261,13 @@ async function approve(caseId, index) {
   } catch (e) { $('#error').textContent = e.message; }
 }
 
-loadCases(); loadLedger();
+async function init() {
+  if (!token) { showTokenBar(); return; }
+  $('#tokenbar').style.display = 'none';
+  try { await loadCases(); await loadLedger(); }
+  catch (e) { $('#error').textContent = e.message; }
+}
+init();
 </script>
 </body></html>
 """
