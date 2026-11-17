@@ -28,7 +28,7 @@ epistemics-heavy habit was explicitly set aside.)
 | `tools.py` | Reads are functions; **writes return a proposal and need a named approver**. |
 | `policy.py` | SLA overrides are **earned**: a cited override applies only when the gathered facts support it. Retrieval renders the whole corpus, ranked — no section is ever hidden. |
 | `costs.py` | Per-case cap that stops a run; the record must reconcile with the ledger. |
-| `cli.py` | `triage CASE-1041 [--tier strong|--approve-as NAME]`. |
+| `cli.py` | `triage CASE-1041 [--tier strong\|--approve-as NAME]`. |
 | `eval.py` | `just eval` — all ten cases scored against held-out truth, with cost. |
 | `web.py` | The thin web UI (M3, 2026-10-12): one page, no framework. The approve endpoint executes the server's own record — a browser cannot invent a state change. |
 | `traces.py` | OTEL traces (M4, 2026-10-12): every triage flushes a span tree to `results/traces/` — nodes, model calls with tier/tokens, repairs, durations. Real OTel api+sdk, no collector. |
